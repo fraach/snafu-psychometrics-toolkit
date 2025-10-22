@@ -1,0 +1,28 @@
+Edge List
+results/networks/:
+sono liste di archi generate da snafu.write_graph(...) (analyze_snafu.py:274). 
+Ogni riga ha le colonne subj,item1,item2,edge 
+(results/networks/verdura_conceptual_network.csv:1): subj indica il gruppo (qui la categoria in maiuscolo), 
+item1 e item2 sono i nodi e edge vale 1 se nell’adiacenza stimata esiste il collegamento, altrimenti 0. 
+Nel caso del metodo “conceptual network” tutti gli archi sono risultate assenti (soglia troppo severa), mentre, ad esempio, il Naive Random Walk restituisce vari 1 (results/networks/verdura_naive_random_walk.csv:5-14).
+I file contengono tutte le coppie non orientate, quindi prevalgono gli zeri; per leggere solo gli archi presenti conviene filtrare le righe con edge == 1.
+
+Psychometrics
+results/psychometrics.csv:
+riassume, per ogni partecipante e categoria, le misure calcolate in compute_psychometric_table() (analyze_snafu.py:108-210). 
+Le colonne principali sono:
+- cluster_switch_static / cluster_switch_fluid: numero medio di cambi di cluster statici/fluidi secondo la tassonomia passata a snafu.clusterSwitch.
+- switch_rate_static: cambi per item (opzione switchrate=True).
+- cluster_size_static / cluster_size_fluid: dimensione media del cluster via snafu.clusterSize.
+- perseverations e perseveration_words: conteggio e lista (JSON) delle ripetizioni individuate da snafu.perseverations*.
+- intrusions e intrusion_words: conteggio e parole considerate intrusioni rispetto allo schema.
+- avg_word_frequency e avg_aoa: medie calcolate su SUBTLEX e Kuperman; gli elenchi missing_* riportano le parole escluse (vedi riga di esempio results/psychometrics.csv:2).
+
+Network Metrics
+results/network_metrics.csv: 
+raccoglie le metriche sintetiche calcolate su ogni grafo inferito (analyze_snafu.py:236-282). Le colonne indicano numero di nodi/archi, densità, clustering medio, grado medio dei vicini e, per la componente connessa più grande, dimensione, densità, distanza media e diametro (results/network_metrics.csv:1-4).
+La colonna method identifica l’algoritmo usato (Naive Random Walk, Conceptual Network, Pathfinder, ecc.); error contiene un messaggio quando la stima fallisce. Per esempio, il metodo “correlation_based” segnala la mancanza di planarity su Windows (results/network_metrics.csv:4).
+Suggerimenti
+
+Per isolare rapidamente gli archi presenti puoi usare Select-String ",1," results/networks/<file>.csv.
+Se vuoi ottenere anche la rete “correlation based” installa una build compatibile di planarity oppure rimuovi temporaneamente quel metodo dal dizionario builders (analyze_snafu.py:253-270).

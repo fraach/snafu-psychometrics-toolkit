@@ -1,0 +1,21 @@
+# Cache e build Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Notebook
+.ipynb_checkpoints/
+
+# Ambienti virtuali
+env/
+venv/
+.venv/
+ENV/
+
+# File di sistema
+.DS_Store
+Thumbs.db
+
+# Output generati dal progetto
+results/
+
