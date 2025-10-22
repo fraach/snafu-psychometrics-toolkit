@@ -26,6 +26,7 @@ Tutte le istruzioni sono pensate per chi non ha mai usato Python o Visual Studio
    Opzioni utili (facoltative):
    - Installa Visual Studio Code: ` .\SETUP_WINDOWS.ps1 -InstallVSCode `
    - Installa Visual Studio 2022 Community: ` .\SETUP_WINDOWS.ps1 -InstallVisualStudio `
+   - Installa snafu da GitHub (se non è su PyPI): ` .\SETUP_WINDOWS.ps1 -SnafuGitUrl "git+https://github.com/<organizzazione>/<repo-snafu>.git" `
 
 Cosa fa lo script:
 - verifica/installa Python (via winget se necessario)
@@ -50,7 +51,11 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
    python -m venv .venv
    .\.venv\Scripts\Activate.ps1
    python -m pip install --upgrade pip setuptools wheel
+   # Tentativo 1: tutti i requisiti
    pip install -r requirements.txt
+   # Se fallisce su "snafu", alternativa:
+   pip install numpy pandas networkx matplotlib
+   pip install snafu
    ```
 3) Lancia gli script:
    ```powershell
@@ -86,6 +91,18 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
 - `winget` non trovato: installa Python manualmente (sezione precedente).
 - Errore durante `pip install` su `snafu`: verifica la connessione Internet e riprova. Se persiste, apri un issue con il log dell'errore.
 - `python` non riconosciuto: chiudi e riapri PowerShell dopo l'installazione, oppure usa `py` al posto di `python`.
+
+### Se `snafu` non è disponibile
+- Lo script di setup prova ad installarlo automaticamente; se fallisce, lo segnala ma completa l'installazione dei pacchetti base. Puoi passare direttamente l'URL git: `-SnafuGitUrl "git+https://github.com/<organizzazione>/<repo-snafu>.git"`.
+- Per usare tutte le funzionalità devi installare `snafu`. Opzioni:
+  - Se è su PyPI: `pip install snafu`
+  - Se è solo su GitHub: `pip install git+https://github.com/<organizzazione>/<repo-snafu>.git`
+  - Con conda (se disponibile in un canale): `conda install -c conda-forge snafu`
+- Senza `snafu` non puoi generare i CSV in `results/`. Se possiedi già `results/psychometrics.csv` e `results/network_metrics.csv`, puoi comunque eseguire:
+  ```powershell
+  .\.venv\Scripts\Activate.ps1
+  python plot_snafu_results.py
+  ```
 
 ## Dati e privacy
 La repo elabora i file inclusi nella cartella `fluency_data/`. Assicurati di avere i diritti per trattare i dati.

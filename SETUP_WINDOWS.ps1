@@ -5,7 +5,8 @@
 
 param(
   [switch]$InstallVSCode = $false,
-  [switch]$InstallVisualStudio = $false
+  [switch]$InstallVisualStudio = $false,
+  [string]$SnafuGitUrl = ""
 )
 
 function Test-Command {
@@ -50,19 +51,51 @@ function Ensure-Venv {
 }
 
 function Ensure-Requirements {
-  Write-Host "[4/5] Installo dipendenze da requirements.txt..." -ForegroundColor Cyan
-  if (-not (Test-Path requirements.txt)) {
-    Write-Error "requirements.txt mancante."
-    exit 1
+  Write-Host "[4/5] Installo dipendenze principali..." -ForegroundColor Cyan
+  # Pacchetti core necessari anche senza snafu
+  pip install --upgrade pip setuptools wheel
+  pip install numpy pandas networkx matplotlib
+
+  Write-Host "Provo ad installare 'snafu' (opzionale, richiesto per l'analisi)..." -ForegroundColor Cyan
+  if ($SnafuGitUrl -and $SnafuGitUrl.Trim() -ne "") {
+    Write-Host "Installo snafu da sorgente: $SnafuGitUrl" -ForegroundColor Cyan
+    pip install $SnafuGitUrl
+  } else {
+    pip install snafu
   }
-  pip install -r requirements.txt
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Installazione 'snafu' non riuscita. Alcune funzioni (analyze_snafu.py) non saranno disponibili."
+    Write-Host "Suggerimenti:" -ForegroundColor Yellow
+    Write-Host " - Verifica la connessione Internet" -ForegroundColor Yellow
+    Write-Host " - Riprova: pip install snafu" -ForegroundColor Yellow
+    Write-Host " - Se non è su PyPI, installa dal repo ufficiale (es. pip install git+https://github.com/<org>/<repo>.git)" -ForegroundColor Yellow
+  }
+}
+
+function Test-PythonModule {
+  param([string]$Module)
+  python - <<PY 2>$null
+import importlib, sys
+sys.exit(0 if importlib.util.find_spec("$Module") else 1)
+PY
+  return ($LASTEXITCODE -eq 0)
 }
 
 function Run-Project {
   Write-Host "[5/5] Eseguo analisi e grafici..." -ForegroundColor Cyan
-  python analyze_snafu.py
-  python plot_snafu_results.py
-  Write-Host "Output salvati in 'results' (csv e figure)." -ForegroundColor Green
+  $hasSnafu = Test-PythonModule -Module snafu
+  if ($hasSnafu) {
+    python analyze_snafu.py
+  } else {
+    Write-Warning "Modulo 'snafu' non disponibile: salto analyze_snafu.py."
+    Write-Host "Se hai già file CSV in 'results/', posso generare comunque i grafici." -ForegroundColor Yellow
+  }
+  if (Test-Path (Join-Path "results" "psychometrics.csv") -and Test-Path (Join-Path "results" "network_metrics.csv")) {
+    python plot_snafu_results.py
+    Write-Host "Output salvati in 'results' (csv e figure)." -ForegroundColor Green
+  } else {
+    Write-Warning "Grafici non generati: mancano i file CSV in 'results/'. Installa 'snafu' e riesegui lo script."
+  }
 }
 
 function Optional-Editors {
@@ -95,4 +128,3 @@ Write-Host "Fatto. Per riutilizzare l'ambiente in futuro:" -ForegroundColor Gree
 Write-Host "  1) Apri PowerShell nella cartella del progetto" -ForegroundColor Gray
 Write-Host "  2) Attiva: .\\.venv\\Scripts\\Activate.ps1" -ForegroundColor Gray
 Write-Host "  3) Esegui: python analyze_snafu.py (e poi plot_snafu_results.py)" -ForegroundColor Gray
-

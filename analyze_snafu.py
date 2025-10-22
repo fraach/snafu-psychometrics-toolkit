@@ -47,7 +47,15 @@ SITE_PACKAGES_ADDED = _extend_sys_path()
 import numpy as np
 import pandas as pd
 import networkx as nx
-import snafu
+try:
+    import snafu
+except ImportError as exc:
+    raise SystemExit(
+        "Modulo 'snafu' non trovato.\n"
+        "- Installa con: pip install snafu (oppure da GitHub se non è su PyPI)\n"
+        "- In alternativa usa lo script SETUP_WINDOWS.ps1 che prova l'installazione automatica.\n"
+        "Senza 'snafu' non è possibile eseguire analyze_snafu.py."
+    ) from exc
 
 from filter import merge_and_validate_rows
 
