@@ -1,17 +1,68 @@
-Panoramica Grafici
 
-- results/figures/psychometrics_summary.png:
-  mostra tre pannelli a barre: 
-  dinamica dei cluster (cambi e dimensioni medie statiche/fluidi, switch rate), 
-  pattern di errore (perseverazioni vs intrusioni) e proprietà lessicali (frequenza SUBTLEX, AoA), aggregati per categoria.
-results/figures/network_metrics_summary.png propone cinque line plot per metodo di stima, confrontando densità, clustering medio, grado medio dei vicini, densità della componente maggiore e distanza media; ogni curva rappresenta una categoria.
-Reti per categoria/metodo
+1) results/figures/psychometrics_summary.png
+- Cosa mostra: tre grafici a barre (pannelli) con medie per categoria (Animali, Frutta, Verdura).
+- Pannello “Cluster dynamics”: misura come si passa da un “gruppo” semantico all’altro (cluster switch static/fluid, switch rate) e la dimensione media dei gruppi (cluster size static/fluid). 
+  In pratica: quanto spesso si cambia tema e quanto “lunghi” sono i sottogruppi di parole affini nominati in sequenza.
+- Pannello “Error patterns”: confronta quante ripetizioni (perseverations) e quante parole fuori categoria (intrusions) compaiono in media.
+- Pannello “Lexical properties”: frequenza media d’uso delle parole (SUBTLEX: più alto = parole più comuni) e età media di acquisizione (AoA: più alto = parole tipicamente apprese più tardi).
+- Come leggere: barre più alte indicano valori maggiori della metrica. Non esiste un “meglio o peggio” assoluto: le differenze tra categorie aiutano a capire come varia la produzione tra domini semantici diversi.
 
-network_<categoria>_naive_random_walk.png (uno per animali/frutta/verdura) visualizza la rete stimata con l’algoritmo NRW: layout force-directed, nodi scalati per grado e colorati secondo i cluster semantici dello schema; box in basso a sinistra riepiloga nodi/archi/densità/clustering.
-network_<categoria>_conceptual_network.png mette in evidenza le connessioni sopra soglia nel modello Conceptual Network; per animali la rete è minima (3 nodi), per verdura priva di archi (annotazione testuale), per frutta solo un arco.
-network_<categoria>_pathfinder.png mostra l’albero Pathfinder: grafo connesso per animali (cammini lunghi), struttura più compatta per verdura, densità intermedia per frutta.
-network_<categoria>_first_edge.png illustra le coppie iniziali rilevate per ciascuna lista (componenti piccole da due nodi); utile come confronto con gli altri metodi.
-Note aggiuntive
+2) results/figures/network_metrics_summary.png
+- Cosa mostra: cinque grafici a linee, uno per metrica di rete. Sull’asse orizzontale ci sono i metodi usati per costruire la rete (Naive Random Walk, Conceptual Network, Pathfinder, First Edge). Ogni linea colorata è una categoria.
+- Metriche principali e interpretazione rapida:
+  - Density (densità): quanto il grafo è “pieno” di connessioni (0=nessun arco, 1=tutti con tutti). Più alta = rete più connessa.
+  - Average clustering (clustering medio): quanto tendono a formarsi triadi/triangoli; più alto = gruppi locali più coesi.
+  - Average neighbor degree (grado medio dei vicini): quanto sono “importanti” (con molte connessioni) i vicini medi di un nodo.
+  - Largest component density (densità del componente più grande): coesione della parte connessa più estesa della rete.
+  - Largest component average shortest path (distanza media minima): quante “tappe” mediamente servono per collegare due nodi nella componente più grande; più basso = rete più compatta.
+- Come leggere: confronta le linee per capire quale categoria genera reti più dense/compatte e come la scelta del metodo cambia la struttura.
 
-I grafici “correlation_based” non sono presenti perché il metodo richiede planarity. Se verrà installata, lo script produrrà anche quei PNG.
-Ogni immagine riporta anche la legenda dei cluster (prime dieci classi) derivata dal relativo schema in schemes/, con colori coerenti tra grafici.
+3) results/figures/network_<categoria>_<metodo>.png (una figura per ogni coppia categoria/metodo)
+- Cosa mostra: la rete ricostruita. Ogni pallino è una parola; il colore indica il cluster semantico (secondo gli schemi in “schemes/”); la dimensione del pallino cresce con il numero di collegamenti (grado). Le etichette aiutano a riconoscere le parole.
+- Riquadro informativo: in basso a sinistra compaiono alcune metriche chiave (nodi, archi, densità, clustering). Se non sono stati stimati archi, appare un messaggio (“Nessun arco stimato”).
+- Interpretazione visiva:
+  - Macchie di colore uniforme indicano gruppi semantici coerenti.
+  - Nodi molto grandi sono “hub” (parole con molte connessioni); possono fungere da ponte tra cluster.
+  - Reti rade o frammentate suggeriscono transizioni più rare o più variabilità nelle risposte.
+
+SIGNIFICATO DEI METODI DI RETE
+
+- Naive Random Walk: collega parole che tendono a comparire vicine nelle liste; produce reti spesso più dense, utili per vedere co-occorrenze frequenti.
+- Conceptual Network: mantiene solo connessioni “forti” in base a criteri/parametri (fitinfo); rete più parsimoniosa, evidenzia le relazioni più stabili.
+- Pathfinder: estrae lo “scheletro” informativo della rete, riducendo i cicli; utile per visualizzare percorsi essenziali.
+- First Edge: usa solo la prima transizione di ogni lista; fotografa le associazioni iniziali più immediate, con coppie spesso isolate.
+- Correlation-based: nel progetto sono calcolate le metriche, ma i grafici PNG non sono generati automaticamente dallo script. Se esistono i CSV relativi, per plottarli andrebbe aggiunto “correlation_based” all’elenco dei metodi nel codice di plotting.
+
+GLOSSARIO (IN BREVE)
+- Cluster: insieme di parole semanticamente affini (es. “felini” dentro Animali).
+- Switch di cluster: passaggio da un cluster a un altro nella sequenza prodotta.
+- Perseveration: ripetizione della stessa parola.
+- Intrusion: parola fuori dalla categoria richiesta.
+- Frequenza (SUBTLEX): quanto è comune una parola nell’uso.
+- AoA (Age of Acquisition): età media in cui una parola viene appresa.
+
+DOMANDE GUIDA PER L’INTERPRETAZIONE
+- I cluster sono compatti (clustering alto) e ben separati (pochi archi tra colori)?
+- La densità cresce con metodi più permissivi (es. NRW) e cala con metodi più selettivi (Conceptual/Pathfinder)?
+- Ci sono hub che collegano cluster diversi (ponte tra temi)?
+- Le categorie differiscono per errori (perseverazioni/intrusioni) o per proprietà lessicali (frequenza/AoA)?
+
+ESEMPI DI LETTURA (PURAMENTE ILLUSTRATIVI)
+- Se “Animali” mostra densità e clustering alti con Pathfinder, suggerisce un lessico ben strutturato con sottogruppi coesi (es. uccelli, felini) collegati da pochi “ponti”.
+- Se “Verdura” risulta priva di archi con Conceptual Network, potrebbe indicare risposte eterogenee o campione ridotto (parametri severi → nessuna relazione robusta). Verifica NRW/First Edge per segnali più deboli.
+- Se “Frutta” ha switch rate elevato ma cluster size piccolo, le persone cambiano tema spesso nominando poche parole per ciascun sottogruppo.
+
+LIMITI E CAUTELE
+- Dimensione campione: con pochi soggetti/liste, le reti possono risultare instabili o vuote.
+- Dipendenza dallo schema: i colori/cluster derivano dai file in “schemes/”; errori o ambiguità nello schema si riflettono nei grafici.
+- Parametri del metodo: soglie/fitinfo influenzano molto densità e connessioni; cambiare i parametri cambia la rete.
+- Aggregazione: i grafici sono di gruppo; pattern individuali possono essere diversi.
+
+DOVE TROVO I FILE
+- Grafico psicometrico: results/figures/psychometrics_summary.png
+- Grafico metriche di rete: results/figures/network_metrics_summary.png
+- Reti per categoria/metodo: results/figures/network_<categoria>_<metodo>.png
+- Liste archi CSV: results/networks/<categoria>_<metodo>.csv
+ - Distribuzione dei gradi (per categoria): results/figures/degree_dist_<categoria>.png
+ - Small-world summary: results/figures/smallworld_summary.png
+ - IRT distribuzione e profilo: results/figures/irt_hist_<categoria>.png, results/figures/irt_position_<categoria>.png

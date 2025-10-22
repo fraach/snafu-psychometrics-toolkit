@@ -74,6 +74,10 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
   - largest_component_density, largest_component_average_shortest_path, largest_component_diameter
 - `networks/*.csv` — liste di archi per ciascuna combinazione categoria/metodo
 - `figures/*.png` — grafici riassuntivi e visualizzazioni delle reti
+  - Nuovi grafici ispirati al paper SNAFU:
+    - `degree_dist_<categoria>.png` — distribuzione dei gradi per metodo
+    - `smallworld_summary.png` — coefficiente small‑world per metodo/categoria
+    - `irt_hist_<categoria>.png` e `irt_position_<categoria>.png` — distribuzione IRT e IRT medio per posizione
 
 ## Uso con Visual Studio Code (facoltativo)
 - Installa VS Code (puoi usare `-InstallVSCode` nello script o scaricarlo dal sito).

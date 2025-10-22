@@ -1,17 +1,3 @@
-"""
-Analisi dei dati SNAFU per prove di fluenza semantica.
-
-Questo script:
-- prepara e filtra i dati grezzi di fluenza;
-- calcola metriche psicometriche per soggetto e categoria;
-- ricostruisce diverse reti semantiche di gruppo e ne estrae metriche
-  strutturali (es. densità, clustering, diametro del componente maggiore);
-- esporta tabelle e liste di archi nei file di output.
-
-Le funzioni sono corredate da docstring e commenti descrittivi in italiano per
-facilitare la lettura e la manutenzione del codice.
-"""
-
 import csv
 import json
 import sys
@@ -21,12 +7,6 @@ BASE_DIR = Path(__file__).parent.resolve()
 
 
 def _extend_sys_path() -> list[str]:
-    """Aggiunge ai `sys.path` le cartelle di site-packages dell'ambiente locale.
-
-    Questo consente di importare dipendenze installate nell'`env/` locale anche
-    quando lo script viene eseguito fuori da quell'ambiente.
-    Restituisce la lista dei percorsi effettivamente aggiunti.
-    """
     version = f"python{sys.version_info.major}.{sys.version_info.minor}"
     candidates = [
         BASE_DIR / "env" / "lib" / version / "site-packages",
@@ -47,21 +27,12 @@ SITE_PACKAGES_ADDED = _extend_sys_path()
 import numpy as np
 import pandas as pd
 import networkx as nx
-try:
-    import snafu
-except ImportError as exc:
-    raise SystemExit(
-        "Modulo 'snafu' non trovato.\n"
-        "- Installa con: pip install snafu (oppure da GitHub se non è su PyPI)\n"
-        "- In alternativa usa lo script SETUP_WINDOWS.ps1 che prova l'installazione automatica.\n"
-        "Senza 'snafu' non è possibile eseguire analyze_snafu.py."
-    ) from exc
+import snafu
 
 from filter import merge_and_validate_rows
 
 BASE_DIR = Path(__file__).parent.resolve()
-# Percorsi e risorse principali del progetto.
-RAW_FILE = BASE_DIR / "fluency_data" / "snafu.csv"
+RAW_FILE = BASE_DIR / "fluency_data" / "snafu_study_female.csv"
 FILTERED_FILE = BASE_DIR / "fluency_data" / "filtered_snafu.csv"
 SCHEME_DIR = BASE_DIR / "schemes"
 SCHEMES = {
@@ -75,14 +46,6 @@ RESULTS_DIR = BASE_DIR / "results"
 NETWORK_DIR = RESULTS_DIR / "networks"
 SCHEME_CACHE_DIR = RESULTS_DIR / "scheme_cache"
 def sanitize_scheme_file(original: Path) -> Path:
-    """Crea una versione sanificata del file di schema.
-
-    - Rimuove BOM e commenti/righe vuote
-    - Tronca spazi superflui
-    - Salva il risultato in `results/scheme_cache/` per velocizzare run successivi
-
-    Se la cache è più recente dell'originale, la riutilizza.
-    """
     SCHEME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     sanitized_path = SCHEME_CACHE_DIR / original.name
     if sanitized_path.exists() and sanitized_path.stat().st_mtime >= original.stat().st_mtime:
@@ -104,7 +67,6 @@ def sanitize_scheme_file(original: Path) -> Path:
 
 
 def get_scheme_path(category: str) -> Path:
-    """Restituisce il percorso dello schema per una categoria validata."""
     if category not in SCHEMES:
         raise KeyError(f"Categoria sconosciuta: {category}")
     return sanitize_scheme_file(SCHEMES[category])
@@ -113,24 +75,45 @@ def get_scheme_path(category: str) -> Path:
 
 
 def ensure_filtered_dataset() -> None:
-    """Rigenera il dataset filtrato se mancante o obsoleto.
-
-    Usa `merge_and_validate_rows` per unire/validare i dati grezzi rispetto agli
-    schemi di categoria, producendo `filtered_snafu.csv`.
-    """
     needs_refresh = not FILTERED_FILE.exists()
     if not needs_refresh:
         needs_refresh = RAW_FILE.stat().st_mtime > FILTERED_FILE.stat().st_mtime
     if needs_refresh:
         merge_and_validate_rows(str(RAW_FILE), str(SCHEME_DIR), str(FILTERED_FILE))
+    # Sanifica sempre il CSV filtrato: rimuove righe con 'item' vuoto o solo spazi
+    try:
+        df = pd.read_csv(FILTERED_FILE, dtype=str)
+        before = len(df)
+        if "item" in df.columns:
+            df["item"] = df["item"].fillna("").astype(str)
+            # Pulisce: rimuove spazi esterni e apici
+            df.loc[:, "item"] = df["item"].str.strip().str.replace("'", "", regex=False)
+
+            # Calcola versione solo-lettere (come farebbe removeNonAlphaChars=True)
+            def _letters_only(s: str) -> str:
+                return "".join(ch for ch in s if ch.isalpha())
+
+            letters = df["item"].map(_letters_only)
+
+            # Rimuove righe che diventerebbero vuote (causano IndexError in snafu)
+            mask_nonempty = letters.str.len() > 0
+            removed_empty = int((~mask_nonempty).sum())
+            df = df[mask_nonempty].copy()
+
+            # Sostituisce l'item con la versione pulita per coerenza con SNAFU
+            df.loc[:, "item"] = letters[mask_nonempty].values
+
+        df.to_csv(FILTERED_FILE, index=False)
+        if before - len(df) > 0:
+            print(
+                f"[sanitize] Rimosse {before - len(df)} righe con item vuoto/non alfabetico da {FILTERED_FILE}"
+            )
+    except Exception:
+        # Se la sanificazione fallisce, proseguiamo comunque: SNAFU solleverà errori utili
+        pass
 
 
 def serialize_nested(value) -> str:
-    """Serializza (come JSON) una struttura annidata o vuota in stringa.
-
-    Utile per salvare elenchi di parole (es. perseverazioni/intrusioni) per
-    soggetto in colonne CSV.
-    """
     if not value:
         return "[]"
     return json.dumps(value, ensure_ascii=True)
@@ -138,15 +121,10 @@ def serialize_nested(value) -> str:
 
 
 def prepare_first_edge_sequences(sequences):
-    """Seleziona solo le liste con almeno due elementi (per First Edge)."""
+    """Keep only fluency lists with at least two items for First Edge."""
     return [seq for seq in sequences if isinstance(seq, (list, tuple)) and len(seq) >= 2]
 
 def flatten_unique_strings(value) -> str:
-    """Appiattisce una struttura annidata in stringhe uniche ordinate (JSON).
-
-    Esempio: set/list/tuple annidati vengono esplosi in una lista piatta di
-    stringhe, deduplicate e ordinate alfabeticamente, poi serializzate in JSON.
-    """
     if not value:
         return "[]"
     flat: list[str] = []
@@ -164,16 +142,6 @@ def flatten_unique_strings(value) -> str:
 
 
 def compute_psychometric_table() -> pd.DataFrame:
-    """Calcola le metriche psicometriche per soggetto e categoria.
-
-    Per ogni categoria (es. animali, frutta, verdura) ottiene:
-    - cluster switch (static/fluid) e switch rate
-    - dimensione media dei cluster (static/fluid)
-    - perseverazioni (conteggi ed elenco parole)
-    - intrusioni (conteggi ed elenco parole)
-    - frequenza media delle parole (SUBTLEX) e voci mancanti
-    - età di acquisizione media (AoA) e voci mancanti
-    """
     rows: list[dict[str, object]] = []
     for category in SCHEMES:
         scheme_path = get_scheme_path(category)
@@ -186,43 +154,36 @@ def compute_psychometric_table() -> pd.DataFrame:
         labeled_lists = data.labeledlists
         subject_ids = data.subs
 
-        # Cambi di cluster stimati con definizione "statica" (confini fissi)
         cluster_switch_static = snafu.clusterSwitch(
             labeled_lists,
             str(scheme_path),
             clustertype="static",
         )
-        # Cambi di cluster con definizione "fluida" (confini data-driven)
         cluster_switch_fluid = snafu.clusterSwitch(
             labeled_lists,
             str(scheme_path),
             clustertype="fluid",
         )
-        # Tasso di switch (normalizzato) in modalità statica
         switch_rate_static = snafu.clusterSwitch(
             labeled_lists,
             str(scheme_path),
             clustertype="static",
             switchrate=True,
         )
-        # Dimensione dei cluster (media) con definizione fluida
         cluster_size_fluid = snafu.clusterSize(
             labeled_lists,
             str(scheme_path),
             clustertype="fluid",
         )
-        # Dimensione dei cluster (media) con definizione statica
         cluster_size_static = snafu.clusterSize(
             labeled_lists,
             str(scheme_path),
             clustertype="static",
         )
-        # Errori di produzione: ripetizioni (perseverazioni) e parole fuori schema (intrusioni)
         perseveration_counts = snafu.perseverations(labeled_lists)
         perseveration_words = snafu.perseverationsList(labeled_lists)
         intrusion_counts = snafu.intrusions(labeled_lists, str(scheme_path))
         intrusion_words = snafu.intrusionsList(labeled_lists, str(scheme_path))
-        # Indicatori lessicali: frequenza e AoA (con tracciamento degli item mancanti)
         word_freq, missing_word_freq = snafu.wordFrequency(
             labeled_lists,
             data=str(FREQUENCY_FILE),
@@ -257,11 +218,6 @@ def compute_psychometric_table() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 def to_networkx_graph(graph) -> nx.Graph:
-    """Converte l'output dei costruttori SNAFU in `networkx.Graph`.
-
-    Supporta sia grafi già `networkx`, sia matrici/tuple restituite dalle
-    funzioni di inferenza di SNAFU.
-    """
     if isinstance(graph, nx.Graph):
         return graph.copy()
     if isinstance(graph, tuple):
@@ -271,11 +227,6 @@ def to_networkx_graph(graph) -> nx.Graph:
 
 
 def compute_graph_metrics(graph: nx.Graph) -> dict[str, object]:
-    """Estrae metriche strutturali dalla rete.
-
-    Valuta dimensioni, densità, clustering medio, grado medio dei vicini e
-    statistiche del componente connesso più grande (ASP e diametro).
-    """
     metrics: dict[str, object] = {}
     num_nodes = graph.number_of_nodes()
     num_edges = graph.number_of_edges()
@@ -319,17 +270,7 @@ def compute_graph_metrics(graph: nx.Graph) -> dict[str, object]:
 
 
 def infer_semantic_networks() -> pd.DataFrame:
-    """Ricostruisce diverse reti semantiche di gruppo e calcola metriche.
-
-    Metodi inclusi:
-    - naive_random_walk: co-occorrenza per passeggiata casuale
-    - conceptual_network: rete concettuale (usa parametri `fitinfo`)
-    - pathfinder: backbone tipo Pathfinder
-    - correlation_based: rete basata su correlazioni
-    - first_edge: collega solo la prima transizione di ogni lista (richiede ≥2 item)
-    """
     NETWORK_DIR.mkdir(parents=True, exist_ok=True)
-    # Parametri di adattamento per la rete concettuale
     fitinfo = snafu.Fitinfo(
         {
             "cn_alpha": 0.05,
@@ -353,7 +294,6 @@ def infer_semantic_networks() -> pd.DataFrame:
         )
 
         sequences = data.Xs
-        # Per First Edge servono liste con almeno due parole prodotte
         first_edge_sequences = prepare_first_edge_sequences(sequences)
 
         def build_first_edge():
@@ -364,7 +304,6 @@ def infer_semantic_networks() -> pd.DataFrame:
                 numnodes=data.groupnumnodes,
             )
 
-        # Collezione di costruttori di grafi, tutti con etichetta metodo
         builders = {
             "naive_random_walk": lambda: snafu.naiveRandomWalk(
                 sequences,
@@ -390,7 +329,6 @@ def infer_semantic_networks() -> pd.DataFrame:
             try:
                 raw_graph = builder()
             except Exception as exc:
-                # In caso di errore sul metodo, registriamo l'eccezione e continuiamo
                 network_rows.append(
                     {
                         "category": category,
@@ -411,7 +349,6 @@ def infer_semantic_networks() -> pd.DataFrame:
             network_rows.append(metrics)
 
             output_path = NETWORK_DIR / f"{category}_{method}.csv"
-            # Esporta la lista archi con etichette leggibili
             snafu.write_graph(
                 raw_graph,
                 str(output_path),
@@ -422,7 +359,6 @@ def infer_semantic_networks() -> pd.DataFrame:
     return pd.DataFrame(network_rows)
 
 def main() -> None:
-    """Punto di ingresso: prepara dati, calcola tabelle e salva output."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     ensure_filtered_dataset()
 
@@ -439,8 +375,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
 
 
 

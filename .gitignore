@@ -17,5 +17,5 @@ ENV/
 Thumbs.db
 
 # Output generati dal progetto
-results/
+#results/
 
