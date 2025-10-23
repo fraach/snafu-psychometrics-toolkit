@@ -1,4 +1,4 @@
-"""
+r"""
 Esecuzione pipeline PNRR tramite import dei moduli locali.
 
 Passi:
@@ -87,6 +87,9 @@ def run_pipeline(
         categories = sorted([p.stem for p in scheme_dir.glob("*.csv")]) or ["animali", "frutta", "verdura"]
     an.SCHEMES = {c: scheme_dir / f"{c}.csv" for c in categories}
 
+    # Applica sempre la sanificazione del filtrato (rimuove item che diventerebbero vuoti dopo removeNonAlphaChars)
+    an.ensure_filtered_dataset(force=False)
+
     psychometrics = an.compute_psychometric_table(categories)
     psych_path = results_dir / "psychometrics.csv"
     psychometrics.to_csv(psych_path, index=False)
@@ -111,6 +114,8 @@ def run_pipeline(
     for cat in categories:
         for method in psr.NETWORK_METHODS:
             psr.plot_network(cat, method, netm_df)
+        # Anche la distribuzione dei gradi per categoria
+        psr.plot_degree_distribution(cat)
 
     print(f"\nCompletato. Risultati in: {results_dir}")
 
@@ -118,7 +123,7 @@ def run_pipeline(
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Esempi PNRR: pipeline end-to-end")
     p.add_argument("--raw", type=Path, required=True, help="CSV grezzo di partenza")
-    p.add_argument("--output", type=Path, default=Path("fluency_data/snafu_pnrr.csv"), help="CSV standardizzato in uscita")
+    p.add_argument("--output", type=Path, default=Path("fluency_data/snafu.csv"), help="CSV standardizzato in uscita")
     p.add_argument("--scheme-dir", type=Path, default=Path("schemes"))
     p.add_argument("--results-dir", type=Path, default=Path("results"))
     p.add_argument("--id-prefix", type=str, default=None)
@@ -162,4 +167,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

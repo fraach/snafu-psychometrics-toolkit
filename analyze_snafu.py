@@ -2,6 +2,7 @@ import csv
 import json
 import sys
 import argparse
+import warnings
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.resolve()
@@ -51,6 +52,7 @@ AOA_FILE = BASE_DIR / "aoa" / "kuperman.csv"
 RESULTS_DIR = BASE_DIR / "results"
 NETWORK_DIR = RESULTS_DIR / "networks"
 SCHEME_CACHE_DIR = RESULTS_DIR / "scheme_cache"
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 def _discover_categories(scheme_dir: Path) -> list[str]:
     cats: list[str] = []
@@ -408,7 +410,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
 
 

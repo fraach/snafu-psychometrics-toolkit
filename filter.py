@@ -85,7 +85,7 @@ def merge_and_validate_rows(input_file, category_dir, output_file, *, min_ot_run
 
     i = 0
     while i < len(data):
-        row = data.iloc[i]
+        row = data.iloc[i].copy()
 
         if i + 1 < len(data):
             merged_item_2 = (
