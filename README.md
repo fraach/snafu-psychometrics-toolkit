@@ -79,6 +79,36 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
     - `smallworld_summary.png` — coefficiente small‑world per metodo/categoria
     - `irt_hist_<categoria>.png` e `irt_position_<categoria>.png` — distribuzione IRT e IRT medio per posizione
 
+## Novità principali (tooling e CLI)
+- `keep_columns.py`: filtra per `--id-prefix`/`--id-suffix`; integrazione filtro pazienti `--patient-csv` + `--study-id`; genera dataset aggiuntivi maschi/femmine; output sempre quotato.
+- `filter.py`: ora ha CLI; rimuove run OT con `--min-ot-run` (o disattiva con `--no-ot-filter`).
+- `analyze_snafu.py`: CLI completa (percorsi, categorie, parametri Conceptual Network, `--force-merge`, `--skip-*`).
+- `plot_snafu_results.py`: figure più ampie e layout meno denso; opzioni `PLOT_CFG` per GCC/k‑core/etichette; nuovi grafici (gradi, small‑world, IRT) e lettura CSV robusta a encoding.
+- Pipeline esempi: `pnrr_test.py` (Python) e `pnrr_test.ps1` (PowerShell). Guida: `PNRR_TEST.md`.
+
+## Pipeline PNRR (consigliata)
+- Opzione Python (import diretto dei moduli):
+  - `py pnrr_test.py --raw "fluency_data\Snafu_2025-10-22_10-02-58.csv" --patients "fluency_data\patients.csv" --study-id PNRR --id-prefix PNRR --categories animali frutta verdura`
+- Opzione PowerShell (script):
+  - `.\pnrr_test.ps1 -Raw "fluency_data\Snafu_2025-10-22_10-02-58.csv" -Patients "fluency_data\patients.csv" -StudyId PNRR -IdPrefix PNRR -MinOTRun 3 -Categories animali,frutta,verdura`
+
+## Esempi CLI per singolo step
+- `keep_columns.py` (standardizza e filtra):
+  - `python keep_columns.py input.csv -o fluency_data\snafu.csv --id-prefix PNRR --patient-csv fluency_data\patients.csv --study-id PNRR`
+  - Aggiungi `--output-male ... --output-female ...` per gli split di genere; `--sep ";"` se usa `;`.
+- `filter.py` (merge + OT):
+  - `py filter.py --input fluency_data\snafu.csv --schemes schemes --output fluency_data\filtered_snafu.csv --min-ot-run 3`
+- `analyze_snafu.py` (analisi):
+  - `py analyze_snafu.py --filtered-file fluency_data\filtered_snafu.csv --scheme-dir schemes --results-dir results`
+  - Con categorie: `--categories animali frutta verdura`
+  - Parametri CN: `--cn-alpha 0.01 --cn-window 3 --cn-threshold 3`
+- `plot_snafu_results.py` (grafici):
+  - `py plot_snafu_results.py` (usa `PLOT_CFG` interno per ridurre l’affollamento)
+
+## Note utili
+- Encoding: i CSV delle reti sono letti in modo robusto (utf‑8‑sig/utf‑8/cp1252/latin1). Se un grafico resta vuoto, rigenera le reti con `analyze_snafu.py` e riprova.
+- SNAFU opzionale nei grafici: small‑world e IRT vengono saltati se `snafu` non è disponibile; gli altri grafici si generano comunque.
+
 ## Uso con Visual Studio Code (facoltativo)
 - Installa VS Code (puoi usare `-InstallVSCode` nello script o scaricarlo dal sito).
 - Apri la cartella del progetto in VS Code (File → Apri cartella).
