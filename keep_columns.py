@@ -51,8 +51,6 @@ ALLOWED_COLUMNS: List[str] = ["id", "listnum", "category", "item", "rt"]
 
 
 def infer_engine(sep: str | None) -> str:
-    # Se non specifichiamo il separatore, usiamo l'engine 'python' che supporta
-    # l'auto-detection (sep=None). Altrimenti, restiamo sul default.
     return "python" if sep is None else "c"
 
 
@@ -93,7 +91,6 @@ def keep_only_allowed_columns(
     encoding: str = "utf-8-sig",
     id_suffix: str | None = None,
     id_prefix: str | None = None,
-    # Filtro per study_id via file pazienti
     patient_csv: Optional[Path] = None,
     study_ids: Optional[Iterable[str]] = None,
     invert: bool = False,
@@ -110,7 +107,6 @@ def keep_only_allowed_columns(
     removed = [c for c in df.columns if c not in ALLOWED_COLUMNS]
     missing = [c for c in ALLOWED_COLUMNS if c not in df.columns]
 
-    # Filtri opzionali su colonna id (se presenti)
     if id_suffix:
         if "id" in df.columns:
             before_rows = len(df)
@@ -126,8 +122,7 @@ def keep_only_allowed_columns(
         else:
             print("[WARN] Filtro --id-prefix ignorato: colonna 'id' assente nel CSV di ingresso")
 
-    # Filtro opzionale via file pazienti + study_id
-    kept_gender_map = None  # dict id -> gender "male"/"female"
+    kept_gender_map = None  
     if patient_csv is not None and study_ids:
         pdf = _read_csv_robust(patient_csv, sep=sep_pat)
         cmap = _normcols(pdf)
@@ -169,7 +164,6 @@ def keep_only_allowed_columns(
             else:
                 print("[WARN] Colonna 'id' mancante: impossibile filtrare per study_id")
 
-            # Prepara mappa genere (se disponibile) per eventuali split
             if gender_col and gender_col in kept_pdf.columns:
                 kept_pdf["__gender__"] = kept_pdf[gender_col].map(_norm_gender)
                 kept_gender_map = {
@@ -178,14 +172,10 @@ def keep_only_allowed_columns(
                     if row.get("__gender__") in ("male", "female")
                 }
 
-    # Aggiunge le colonne mancanti come vuote (NaN) per avere lo schema completo
     for col in missing:
         df[col] = pd.NA
 
-    # Seleziona e ordina le colonne finali secondo ALLOWED_COLUMNS
     df_out = df[ALLOWED_COLUMNS]
-    # Scrive il CSV quotando SEMPRE sia header che dati, così rimangono le ""
-    # attorno a colonne e valori indipendentemente dal contenuto.
     df_out.to_csv(
         output_csv,
         index=False,
@@ -195,14 +185,12 @@ def keep_only_allowed_columns(
         quotechar='"',
     )
 
-    # Messaggi riassuntivi
     print(f"Salvato: {output_csv}")
     if removed:
         print(f"Colonne rimosse ({len(removed)}): {', '.join(removed)}")
     if missing:
         print(f"Colonne aggiunte come vuote ({len(missing)}): {', '.join(missing)}")
 
-    # Split per genere (opzionale)
     if (not no_gender_splits) and kept_gender_map and "id" in df_out.columns:
         male_ids = {pid for pid, g in kept_gender_map.items() if g == "male"}
         female_ids = {pid for pid, g in kept_gender_map.items() if g == "female"}
@@ -244,7 +232,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--inplace", action="store_true", help="Sovrascrive il file di ingresso")
     p.add_argument("--id-suffix", dest="id_suffix", type=str, default=None, help="Mantiene solo righe con id che termina con questo suffisso")
     p.add_argument("--id-prefix", dest="id_prefix", type=str, default=None, help="Mantiene solo righe con id che inizia con questo prefisso")
-    # Opzioni filtro pazienti/studio
     p.add_argument("--patient-csv", type=Path, default=None, help="CSV dei pazienti per filtro study_id")
     p.add_argument("--study-id", nargs="+", default=None, help="Uno o più valori di studio_id/study_id da includere")
     p.add_argument("--invert", action="store_true", help="Esclude gli study-id specificati")

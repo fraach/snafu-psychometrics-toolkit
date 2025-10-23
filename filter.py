@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import argparse
 
 def _load_allowed_items(category_dir: str) -> dict:
     """Carica per ciascuna categoria l'insieme di item validi dallo schema.
@@ -25,7 +26,6 @@ def _load_allowed_items(category_dir: str) -> dict:
             )
             allowed[category] = set(items.tolist())
         except Exception:
-            # Se uno schema non è leggibile, proseguiamo senza bloccare l'intero processo
             continue
     return allowed
 
@@ -47,7 +47,6 @@ def _remove_consecutive_ot_runs(df: pd.DataFrame, category_dir: str, min_run: in
     allowed_map = _load_allowed_items(category_dir)
     to_drop: list[int] = []
 
-    # Mantieni l'ordine originale per ogni gruppo usando l'indice
     df = df.copy()
     df['_orig_idx'] = df.index
 
@@ -56,7 +55,6 @@ def _remove_consecutive_ot_runs(df: pd.DataFrame, category_dir: str, min_run: in
         category = str(g['category'].iloc[0]) if 'category' in g.columns else ''
         allowed = allowed_map.get(category, set())
         if not allowed:
-            # Se non abbiamo lo schema, non applichiamo il filtro a questo gruppo
             continue
         items = g['item'].astype(str).map(_normalize_item).tolist()
         idxs = g['_orig_idx'].tolist()
@@ -80,43 +78,35 @@ def _remove_consecutive_ot_runs(df: pd.DataFrame, category_dir: str, min_run: in
     df.drop(columns=['_orig_idx'], inplace=True, errors='ignore')
     return df
 
-def merge_and_validate_rows(input_file, category_dir, output_file):
-    # Caricare il file principale
+def merge_and_validate_rows(input_file, category_dir, output_file, *, min_ot_run: int = 3, apply_ot_filter: bool = True):
+    
     data = pd.read_csv(input_file)
-
-    # Preparare un nuovo DataFrame per il risultato
     merged_data = []
 
     i = 0
     while i < len(data):
         row = data.iloc[i]
 
-        # Unire l'item corrente con l'item successivo
         if i + 1 < len(data):
             merged_item_2 = (
                 str(data.iloc[i]['item']) +
                 str(data.iloc[i + 1]['item'])
             ).replace("'", "").replace(" ", "")
 
-            # Controllare il file della categoria corrispondente
             category_file = os.path.join(category_dir, f"{row['category']}.csv")
             if os.path.exists(category_file):
                 try:
-                    # Caricare solo la seconda colonna
                     category_data = pd.read_csv(category_file, header=None, usecols=[1])
                 except Exception as e:
                     print(f"Errore durante il caricamento di {category_file}: {e}")
                     continue
 
-                # Controllare se l'item unito esiste nella seconda colonna
                 if merged_item_2 in category_data.iloc[:, 0].values:
-                    # Sostituire i due item con l'unione
                     row['item'] = merged_item_2
                     merged_data.append(row)
-                    i += 2  # Saltare la riga successiva
+                    i += 2  
                     continue
 
-        # Unire l'item corrente con i due successivi
         if i + 2 < len(data):
             merged_item_3 = (
                 str(data.iloc[i]['item']) +
@@ -124,51 +114,54 @@ def merge_and_validate_rows(input_file, category_dir, output_file):
                 str(data.iloc[i + 2]['item'])
             ).replace("'", "").replace(" ", "")
 
-            # Controllare il file della categoria corrispondente
             if os.path.exists(category_file):
                 try:
-                    # Caricare solo la seconda colonna
                     category_data = pd.read_csv(category_file, header=None, usecols=[1])
                 except Exception as e:
                     print(f"Errore durante il caricamento di {category_file}: {e}")
                     continue
 
-                # Controllare se l'item unito esiste nella seconda colonna
                 if merged_item_3 in category_data.iloc[:, 0].values:
-                    # Sostituire i tre item con l'unione
                     row['item'] = merged_item_3
                     merged_data.append(row)
-                    i += 3  # Saltare le due righe successive
+                    i += 3  
                     continue
 
-        # Aggiungere la riga corrente senza modifiche
         merged_data.append(row)
         i += 1
 
-    # Creare un nuovo DataFrame con i dati uniti
     merged_df = pd.DataFrame(merged_data)
 
-    # Applicare il filtro OT: rimuove sequenze di 3+ item fuori categoria consecutivi
-    try:
-        merged_df = _remove_consecutive_ot_runs(merged_df, category_dir, min_run=3)
-    except Exception as e:
-        print(f"[WARN] Filtraggio OT non applicato per errore: {e}")
+    if apply_ot_filter:
+        try:
+            merged_df = _remove_consecutive_ot_runs(merged_df, category_dir, min_run=min_ot_run)
+        except Exception as e:
+            print(f"[WARN] Filtraggio OT non applicato per errore: {e}")
 
-    # Salvare il risultato in un file CSV
     merged_df.to_csv(output_file, index=False)
     print(f"File salvato con successo in: {output_file}")
 
-# Percorsi
+
+def _parse_args():
+    p = argparse.ArgumentParser(description="Unisci/valida dati SNAFU e applica filtro OT opzionale")
+    p.add_argument("--input", "-i", default="fluency_data/snafu.csv", help="CSV di input con colonne id,listnum,category,item,rt")
+    p.add_argument("--schemes", "-s", default="schemes/", help="Directory degli schemi di categoria (file <categoria>.csv)")
+    p.add_argument("--output", "-o", default="fluency_data/filtered_snafu.csv", help="CSV di output filtrato")
+    p.add_argument("--min-ot-run", type=int, default=3, help="Lunghezza minima della sequenza OT consecutiva da rimuovere")
+    p.add_argument("--no-ot-filter", action="store_true", help="Disattiva il filtro OT")
+    return p.parse_args()
+
 
 def main():
-    input_file = 'fluency_data/snafu_study_male.csv'
-    category_dir = 'schemes/'  
-    output_file = 'fluency_data/filtered_snafu.csv'
-
-    merge_and_validate_rows(input_file, category_dir, output_file)
+    args = _parse_args()
+    merge_and_validate_rows(
+        args.input,
+        args.schemes,
+        args.output,
+        min_ot_run=max(1, args.min_ot_run),
+        apply_ot_filter=(not args.no_ot_filter),
+    )
 
 
 if __name__ == "__main__":
     main()
-
-

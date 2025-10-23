@@ -1,6 +1,7 @@
 import csv
 import json
 import sys
+import argparse
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.resolve()
@@ -27,12 +28,17 @@ SITE_PACKAGES_ADDED = _extend_sys_path()
 import numpy as np
 import pandas as pd
 import networkx as nx
-import snafu
+try:
+    import snafu #type:ignore
+except ImportError as exc:
+    raise SystemExit(
+        "Modulo 'snafu' non trovato. Installa con 'pip install snafu' o usa SETUP_WINDOWS.ps1."
+    ) from exc
 
 from filter import merge_and_validate_rows
 
-BASE_DIR = Path(__file__).parent.resolve()
-RAW_FILE = BASE_DIR / "fluency_data" / "snafu_study_female.csv"
+# Default
+RAW_FILE = BASE_DIR / "fluency_data" / "snafu.csv"
 FILTERED_FILE = BASE_DIR / "fluency_data" / "filtered_snafu.csv"
 SCHEME_DIR = BASE_DIR / "schemes"
 SCHEMES = {
@@ -45,6 +51,13 @@ AOA_FILE = BASE_DIR / "aoa" / "kuperman.csv"
 RESULTS_DIR = BASE_DIR / "results"
 NETWORK_DIR = RESULTS_DIR / "networks"
 SCHEME_CACHE_DIR = RESULTS_DIR / "scheme_cache"
+
+def _discover_categories(scheme_dir: Path) -> list[str]:
+    cats: list[str] = []
+    if scheme_dir.exists():
+        for p in scheme_dir.glob("*.csv"):
+            cats.append(p.stem)
+    return sorted(cats) or ["animali", "frutta", "verdura"]
 def sanitize_scheme_file(original: Path) -> Path:
     SCHEME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     sanitized_path = SCHEME_CACHE_DIR / original.name
@@ -74,33 +87,30 @@ def get_scheme_path(category: str) -> Path:
 
 
 
-def ensure_filtered_dataset() -> None:
+def ensure_filtered_dataset(*, force: bool = False) -> None:
     needs_refresh = not FILTERED_FILE.exists()
     if not needs_refresh:
         needs_refresh = RAW_FILE.stat().st_mtime > FILTERED_FILE.stat().st_mtime
+    if force:
+        needs_refresh = True
     if needs_refresh:
         merge_and_validate_rows(str(RAW_FILE), str(SCHEME_DIR), str(FILTERED_FILE))
-    # Sanifica sempre il CSV filtrato: rimuove righe con 'item' vuoto o solo spazi
     try:
         df = pd.read_csv(FILTERED_FILE, dtype=str)
         before = len(df)
         if "item" in df.columns:
             df["item"] = df["item"].fillna("").astype(str)
-            # Pulisce: rimuove spazi esterni e apici
             df.loc[:, "item"] = df["item"].str.strip().str.replace("'", "", regex=False)
 
-            # Calcola versione solo-lettere (come farebbe removeNonAlphaChars=True)
             def _letters_only(s: str) -> str:
                 return "".join(ch for ch in s if ch.isalpha())
 
             letters = df["item"].map(_letters_only)
 
-            # Rimuove righe che diventerebbero vuote (causano IndexError in snafu)
             mask_nonempty = letters.str.len() > 0
             removed_empty = int((~mask_nonempty).sum())
             df = df[mask_nonempty].copy()
 
-            # Sostituisce l'item con la versione pulita per coerenza con SNAFU
             df.loc[:, "item"] = letters[mask_nonempty].values
 
         df.to_csv(FILTERED_FILE, index=False)
@@ -109,7 +119,6 @@ def ensure_filtered_dataset() -> None:
                 f"[sanitize] Rimosse {before - len(df)} righe con item vuoto/non alfabetico da {FILTERED_FILE}"
             )
     except Exception:
-        # Se la sanificazione fallisce, proseguiamo comunque: SNAFU solleverà errori utili
         pass
 
 
@@ -141,9 +150,9 @@ def flatten_unique_strings(value) -> str:
     return json.dumps(unique_sorted, ensure_ascii=True)
 
 
-def compute_psychometric_table() -> pd.DataFrame:
+def compute_psychometric_table(categories: list[str]) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    for category in SCHEMES:
+    for category in categories:
         scheme_path = get_scheme_path(category)
         data = snafu.load_fluency_data(
             str(FILTERED_FILE),
@@ -154,46 +163,37 @@ def compute_psychometric_table() -> pd.DataFrame:
         labeled_lists = data.labeledlists
         subject_ids = data.subs
 
-        cluster_switch_static = snafu.clusterSwitch(
-            labeled_lists,
-            str(scheme_path),
-            clustertype="static",
-        )
-        cluster_switch_fluid = snafu.clusterSwitch(
-            labeled_lists,
-            str(scheme_path),
-            clustertype="fluid",
-        )
-        switch_rate_static = snafu.clusterSwitch(
-            labeled_lists,
-            str(scheme_path),
-            clustertype="static",
-            switchrate=True,
-        )
-        cluster_size_fluid = snafu.clusterSize(
-            labeled_lists,
-            str(scheme_path),
-            clustertype="fluid",
-        )
-        cluster_size_static = snafu.clusterSize(
-            labeled_lists,
-            str(scheme_path),
-            clustertype="static",
-        )
-        perseveration_counts = snafu.perseverations(labeled_lists)
-        perseveration_words = snafu.perseverationsList(labeled_lists)
-        intrusion_counts = snafu.intrusions(labeled_lists, str(scheme_path))
-        intrusion_words = snafu.intrusionsList(labeled_lists, str(scheme_path))
-        word_freq, missing_word_freq = snafu.wordFrequency(
-            labeled_lists,
-            data=str(FREQUENCY_FILE),
-            missing=0.5,
-        )
-        aoa, missing_aoa = snafu.ageOfAcquisition(
-            labeled_lists,
-            data=str(AOA_FILE),
-            missing=None,
-        )
+        n = len(subject_ids)
+        if n == 0 or not labeled_lists:
+            continue
+
+        def _safe(default_list, fn, *args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception:
+                return default_list
+
+        zeros = [0.0] * n
+        empties = [[] for _ in range(n)]
+        nones = [None] * n
+
+        cluster_switch_static = _safe(zeros, snafu.clusterSwitch, labeled_lists, str(scheme_path), clustertype="static")
+        cluster_switch_fluid = _safe(zeros, snafu.clusterSwitch, labeled_lists, str(scheme_path), clustertype="fluid")
+        switch_rate_static = _safe(zeros, snafu.clusterSwitch, labeled_lists, str(scheme_path), clustertype="static", switchrate=True)
+        cluster_size_fluid = _safe(zeros, snafu.clusterSize, labeled_lists, str(scheme_path), clustertype="fluid")
+        cluster_size_static = _safe(zeros, snafu.clusterSize, labeled_lists, str(scheme_path), clustertype="static")
+        perseveration_counts = _safe(zeros, snafu.perseverations, labeled_lists)
+        perseveration_words = _safe(empties, snafu.perseverationsList, labeled_lists)
+        intrusion_counts = _safe(zeros, snafu.intrusions, labeled_lists, str(scheme_path))
+        intrusion_words = _safe(empties, snafu.intrusionsList, labeled_lists, str(scheme_path))
+        try:
+            word_freq, missing_word_freq = snafu.wordFrequency(labeled_lists, data=str(FREQUENCY_FILE), missing=0.5)
+        except Exception:
+            word_freq, missing_word_freq = nones, empties
+        try:
+            aoa, missing_aoa = snafu.ageOfAcquisition(labeled_lists, data=str(AOA_FILE), missing=None)
+        except Exception:
+            aoa, missing_aoa = nones, empties
 
         for idx, subject in enumerate(subject_ids):
             rows.append(
@@ -269,19 +269,19 @@ def compute_graph_metrics(graph: nx.Graph) -> dict[str, object]:
     return metrics
 
 
-def infer_semantic_networks() -> pd.DataFrame:
+def infer_semantic_networks(categories: list[str], *, cn_alpha: float = 0.05, cn_windowsize: int = 2, cn_threshold: int = 2) -> pd.DataFrame:
     NETWORK_DIR.mkdir(parents=True, exist_ok=True)
     fitinfo = snafu.Fitinfo(
         {
-            "cn_alpha": 0.05,
-            "cn_windowsize": 2,
-            "cn_threshold": 2,
+            "cn_alpha": cn_alpha,
+            "cn_windowsize": cn_windowsize,
+            "cn_threshold": cn_threshold,
         }
     )
 
     network_rows: list[dict[str, object]] = []
 
-    for category in SCHEMES:
+    for category in categories:
         scheme_path = get_scheme_path(category)
         data = snafu.load_fluency_data(
             str(FILTERED_FILE),
@@ -358,15 +358,48 @@ def infer_semantic_networks() -> pd.DataFrame:
 
     return pd.DataFrame(network_rows)
 
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Analisi SNAFU: psicometria e reti semantiche")
+    p.add_argument("--raw-file", type=Path, default=RAW_FILE, help="CSV grezzo (input)")
+    p.add_argument("--filtered-file", type=Path, default=FILTERED_FILE, help="CSV filtrato (output di filter.py)")
+    p.add_argument("--scheme-dir", type=Path, default=SCHEME_DIR, help="Directory degli schemi")
+    p.add_argument("--results-dir", type=Path, default=RESULTS_DIR, help="Directory risultati")
+    p.add_argument("--categories", nargs="+", default=None, help="Categorie da analizzare (default: tutti gli schemi trovati)")
+    p.add_argument("--force-merge", action="store_true", help="Rigenera sempre il filtrato")
+    p.add_argument("--skip-psychometrics", action="store_true")
+    p.add_argument("--skip-networks", action="store_true")
+    p.add_argument("--cn-alpha", type=float, default=0.05)
+    p.add_argument("--cn-window", type=int, default=2)
+    p.add_argument("--cn-threshold", type=int, default=2)
+    return p.parse_args()
+
+
 def main() -> None:
+    global RAW_FILE, FILTERED_FILE, SCHEME_DIR, SCHEMES, RESULTS_DIR, NETWORK_DIR, SCHEME_CACHE_DIR
+
+    args = _parse_args()
+
+    RAW_FILE = args.raw_file if isinstance(args.raw_file, Path) else Path(args.raw_file)
+    FILTERED_FILE = args.filtered_file if isinstance(args.filtered_file, Path) else Path(args.filtered_file)
+    SCHEME_DIR = args.scheme_dir if isinstance(args.scheme_dir, Path) else Path(args.scheme_dir)
+    RESULTS_DIR = args.results_dir if isinstance(args.results_dir, Path) else Path(args.results_dir)
+    NETWORK_DIR = RESULTS_DIR / "networks"
+    SCHEME_CACHE_DIR = RESULTS_DIR / "scheme_cache"
+
+    discovered = _discover_categories(SCHEME_DIR)
+    cats = args.categories or discovered
+    SCHEMES = {c: SCHEME_DIR / f"{c}.csv" for c in cats}
+
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    ensure_filtered_dataset()
+    ensure_filtered_dataset(force=args.force_merge)
 
-    psychometrics = compute_psychometric_table()
-    psychometrics.to_csv(RESULTS_DIR / "psychometrics.csv", index=False)
+    if not args.skip_psychometrics:
+        psychometrics = compute_psychometric_table(cats)
+        psychometrics.to_csv(RESULTS_DIR / "psychometrics.csv", index=False)
 
-    network_metrics = infer_semantic_networks()
-    network_metrics.to_csv(RESULTS_DIR / "network_metrics.csv", index=False)
+    if not args.skip_networks:
+        network_metrics = infer_semantic_networks(cats, cn_alpha=args.cn_alpha, cn_windowsize=args.cn_window, cn_threshold=args.cn_threshold)
+        network_metrics.to_csv(RESULTS_DIR / "network_metrics.csv", index=False)
 
     print("Psychometrics saved to", RESULTS_DIR / "psychometrics.csv")
     print("Network metrics saved to", RESULTS_DIR / "network_metrics.csv")
@@ -375,8 +408,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
 
 
 

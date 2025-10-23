@@ -54,36 +54,25 @@ NETWORK_METHODS: Iterable[str] = (
 
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Configurazione per rendere le reti meno "affollate" a video
 PLOT_CFG = {
-    # Mostra solo la componente connessa più grande (True consigliato per reti dense)
     "filter_to_gcc": True,
-    # Applica un filtraggio k-core (k>=2) per rimuovere nodi/frange a bassa connettività
     "use_k_core": False,
     "k_core_min_degree": 2,
-    # Etichette: "top_degree" (default), "all" o "none"
     "label_strategy": "top_degree",
-    # Numero massimo di etichette quando label_strategy = top_degree
     "max_labels": 80,
-    # Layout: "spring", "kamada" oppure "auto" (sceglie kamada per reti molto grandi)
     "layout": "auto",
-    # Fattore per k nel layout spring: k = factor / sqrt(n)
     "spring_k_factor": 2.2,
-    # Dimensioni figura dinamiche in base ai nodi
     "fig_base_w": 8.0,
     "fig_base_h": 6.5,
-    "fig_scale_per_node": 0.05,  # aggiunta in pollici per nodo (più spazio)
+    "fig_scale_per_node": 0.05,  
     "fig_max_w": 28.0,
     "fig_max_h": 22.0,
-    # Aspetto
     "edge_alpha": 0.2,
     "edge_width": 0.9,
     "node_edgecolor": "white",
     "node_linewidth": 0.6,
-    # Scala dimensione nodi
     "node_size_min": 120.0,
     "node_size_max": 900.0,
-    # Etichette
     "label_fontsize": 7,
 }
 
@@ -124,7 +113,6 @@ def load_network(category: str, method: str) -> nx.Graph:
                 return pd.read_csv(p, encoding=enc)
             except Exception as e1:
                 last_exc = e1
-                # Tentativo alternativo: decodifica tollerante e StringIO
                 try:
                     text = p.read_bytes().decode(enc, errors="replace")
                     import io as _io
@@ -132,13 +120,11 @@ def load_network(category: str, method: str) -> nx.Graph:
                 except Exception as e2:
                     last_exc = e2
                     continue
-        # Estremo fallback
         if last_exc is not None:
             raise last_exc
         return pd.read_csv(p)
 
     df = _read_csv_robust(path)
-    # Normalizza nomi colonne e gestisce BOM
     df.columns = [str(c).strip().lstrip("\ufeff") for c in df.columns]
     lower_map = {c.lower(): c for c in df.columns}
     if "edge" not in lower_map:
@@ -148,7 +134,6 @@ def load_network(category: str, method: str) -> nx.Graph:
     i2 = lower_map.get("item2", "item2")
     if i1 not in df.columns or i2 not in df.columns:
         raise ValueError(f"Colonne 'item1'/'item2' mancanti in {path}")
-    # Converte edge in intero (gestisce stringhe)
     df[edge_col] = pd.to_numeric(df[edge_col], errors="coerce").fillna(0).astype(int)
     edges = df[df[edge_col] == 1][[i1, i2]].dropna()
     g = nx.Graph()
@@ -157,7 +142,6 @@ def load_network(category: str, method: str) -> nx.Graph:
         item2 = str(row[i2]).strip()
         if item1 and item2:
             g.add_edge(item1, item2)
-    # assicurati di includere eventuali nodi isolati citati nel file
     isolated = set(df[i1].dropna().astype(str).str.strip().unique()).union(
         df[i2].dropna().astype(str).str.strip().unique()
     )
@@ -205,7 +189,6 @@ def plot_network(category: str, method: str, metrics_df: pd.DataFrame) -> None:
         plt.close(fig)
         return
 
-    # Opzionale: filtra alla componente connessa più grande e/o k-core
     G = graph
     if PLOT_CFG["filter_to_gcc"] and graph.number_of_nodes() > 0 and graph.number_of_edges() > 0:
         gcc_nodes = max(nx.connected_components(graph), key=len)
@@ -223,7 +206,6 @@ def plot_network(category: str, method: str, metrics_df: pd.DataFrame) -> None:
     color_map = {cluster: palette[idx] for idx, cluster in enumerate(unique_clusters)}
     node_colors = [color_map[cluster] for cluster in node_clusters]
 
-    # Dimensione dei nodi scalata tra min e max sul grado
     degrees = dict(G.degree())
     deg_vals = np.array([degrees[node] for node in G.nodes()], dtype=float)
     if deg_vals.size == 0:
@@ -234,7 +216,6 @@ def plot_network(category: str, method: str, metrics_df: pd.DataFrame) -> None:
     else:
         node_sizes = np.full_like(deg_vals, (PLOT_CFG["node_size_min"] + PLOT_CFG["node_size_max"]) / 2)
 
-    # Layout più spazioso: spring con k ~ 1/sqrt(n) oppure Kamada-Kawai
     n_nodes = G.number_of_nodes()
     layout_mode = PLOT_CFG["layout"]
     if layout_mode == "auto":
@@ -245,7 +226,6 @@ def plot_network(category: str, method: str, metrics_df: pd.DataFrame) -> None:
         k = PLOT_CFG["spring_k_factor"] / np.sqrt(max(n_nodes, 1))
         pos = nx.spring_layout(G, seed=42, k=k, iterations=200, scale=2.0)
 
-    # Figura più ampia per reti grandi
     w = min(PLOT_CFG["fig_max_w"], PLOT_CFG["fig_base_w"] + PLOT_CFG["fig_scale_per_node"] * n_nodes)
     h = min(PLOT_CFG["fig_max_h"], PLOT_CFG["fig_base_h"] + PLOT_CFG["fig_scale_per_node"] * n_nodes)
     fig, ax = plt.subplots(figsize=(w, h))
@@ -261,13 +241,11 @@ def plot_network(category: str, method: str, metrics_df: pd.DataFrame) -> None:
         edgecolors=PLOT_CFG["node_edgecolor"],
     )
 
-    # Etichette: tutte, nessuna, oppure solo top-degree
     label_strategy = PLOT_CFG["label_strategy"]
     if label_strategy == "all":
         nx.draw_networkx_labels(G, pos, ax=ax, font_size=PLOT_CFG["label_fontsize"])
     elif label_strategy == "top_degree":
         top = sorted(degrees.items(), key=lambda kv: kv[1], reverse=True)[: PLOT_CFG["max_labels"]]
-        # Disegna etichette SOLO per i nodi selezionati, passando labels esplicite
         top_nodes = [name for name, _ in top if name in pos]
         if top_nodes:
             labels_dict = {n: n for n in top_nodes}
@@ -384,9 +362,7 @@ def plot_irt_figures() -> None:
     except Exception:
         return
 
-    # Aggrega per categoria
     for cat in SCHEMES.keys():
-        # prendi tutte le liste di quella categoria
         irts_all: List[float] = []
         pos_vals: Dict[int, List[float]] = {}
         for sid in data.subs:
@@ -402,7 +378,6 @@ def plot_irt_figures() -> None:
         if not irts_all:
             continue
 
-        # Istogramma aggregato
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.hist(irts_all, bins=30, color="#4C72B0", alpha=0.85)
         ax.set_title(f"Distribuzione IRT — {cat.title()}")
@@ -413,7 +388,6 @@ def plot_irt_figures() -> None:
         fig.savefig(FIGURES_DIR / f"irt_hist_{cat}.png", dpi=300)
         plt.close(fig)
 
-        # Media IRT per posizione
         positions = sorted(pos_vals.keys())
         means = [np.mean(pos_vals[p]) for p in positions]
         stds = [np.std(pos_vals[p]) for p in positions]
@@ -519,10 +493,8 @@ def main() -> None:
     for category in SCHEMES:
         for method in NETWORK_METHODS:
             plot_network(category, method, network_metrics_df)
-        # Nuovi grafici ispirati al paper SNAFU
         plot_degree_distribution(category)
 
-    # Riepilogo small-world e grafici IRT
     plot_smallworld_summary()
     plot_irt_figures()
 
