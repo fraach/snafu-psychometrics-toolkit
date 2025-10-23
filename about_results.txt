@@ -25,4 +25,3 @@ La colonna method identifica l’algoritmo usato (Naive Random Walk, Conceptual 
 Suggerimenti
 
 Per isolare rapidamente gli archi presenti puoi usare Select-String ",1," results/networks/<file>.csv.
-Se vuoi ottenere anche la rete “correlation based” installa una build compatibile di planarity oppure rimuovi temporaneamente quel metodo dal dizionario builders (analyze_snafu.py:253-270).

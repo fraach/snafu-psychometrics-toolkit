@@ -5,8 +5,6 @@ Questa repo analizza liste di fluenza semantica con la libreria SNAFU e genera:
 - reti semantiche di gruppo con relative metriche
 - grafici riassuntivi delle reti e delle metriche
 
-Tutte le istruzioni sono pensate per chi non ha mai usato Python o Visual Studio/VS Code.
-
 ## Requisiti
 - Windows 10/11
 - Connessione Internet (per installare Python e i pacchetti)
@@ -88,13 +86,13 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
 
 ## Pipeline PNRR (consigliata)
 - Opzione Python (import diretto dei moduli):
-  - `py pnrr_test.py --raw "fluency_data\Snafu_2025-10-22_10-02-58.csv" --patients "fluency_data\patients.csv" --study-id PNRR --id-prefix PNRR --categories animali frutta verdura`
+  - `py pnrr_test.py --raw "fluency_data\snafu_downloaded.csv" --patients "fluency_data\patients.csv" --study-id PNRR --id-prefix PNRR --categories animali frutta verdura`
 - Opzione PowerShell (script):
-  - `.\pnrr_test.ps1 -Raw "fluency_data\Snafu_2025-10-22_10-02-58.csv" -Patients "fluency_data\patients.csv" -StudyId PNRR -IdPrefix PNRR -MinOTRun 3 -Categories animali,frutta,verdura`
+  - `.\pnrr_test.ps1 -Raw "fluency_data\snafu_downloaded.csv" -Patients "fluency_data\patients.csv" -StudyId PNRR -IdPrefix PNRR -MinOTRun 3 -Categories animali,frutta,verdura`
 
 ## Esempi CLI per singolo step
 - `keep_columns.py` (standardizza e filtra):
-  - `python keep_columns.py input.csv -o fluency_data\snafu.csv --id-prefix PNRR --patient-csv fluency_data\patients.csv --study-id PNRR`
+  - `python keep_columns.py input.csv -o fluency_data\snafu_downloaded.csv --id-prefix PNRR --patient-csv fluency_data\patients.csv --study-id PNRR`
   - Aggiungi `--output-male ... --output-female ...` per gli split di genere; `--sep ";"` se usa `;`.
 - `filter.py` (merge + OT):
   - `py filter.py --input fluency_data\snafu.csv --schemes schemes --output fluency_data\filtered_snafu.csv --min-ot-run 3`

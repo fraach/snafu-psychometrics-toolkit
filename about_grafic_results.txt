@@ -41,12 +41,6 @@ GLOSSARIO (IN BREVE)
 - Frequenza (SUBTLEX): quanto è comune una parola nell’uso.
 - AoA (Age of Acquisition): età media in cui una parola viene appresa.
 
-DOMANDE GUIDA PER L’INTERPRETAZIONE
-- I cluster sono compatti (clustering alto) e ben separati (pochi archi tra colori)?
-- La densità cresce con metodi più permissivi (es. NRW) e cala con metodi più selettivi (Conceptual/Pathfinder)?
-- Ci sono hub che collegano cluster diversi (ponte tra temi)?
-- Le categorie differiscono per errori (perseverazioni/intrusioni) o per proprietà lessicali (frequenza/AoA)?
-
 ESEMPI DI LETTURA (PURAMENTE ILLUSTRATIVI)
 - Se “Animali” mostra densità e clustering alti con Pathfinder, suggerisce un lessico ben strutturato con sottogruppi coesi (es. uccelli, felini) collegati da pochi “ponti”.
 - Se “Verdura” risulta priva di archi con Conceptual Network, potrebbe indicare risposte eterogenee o campione ridotto (parametri severi → nessuna relazione robusta). Verifica NRW/First Edge per segnali più deboli.
@@ -63,6 +57,6 @@ DOVE TROVO I FILE
 - Grafico metriche di rete: results/figures/network_metrics_summary.png
 - Reti per categoria/metodo: results/figures/network_<categoria>_<metodo>.png
 - Liste archi CSV: results/networks/<categoria>_<metodo>.csv
- - Distribuzione dei gradi (per categoria): results/figures/degree_dist_<categoria>.png
- - Small-world summary: results/figures/smallworld_summary.png
- - IRT distribuzione e profilo: results/figures/irt_hist_<categoria>.png, results/figures/irt_position_<categoria>.png
+- Distribuzione dei gradi (per categoria): results/figures/degree_dist_<categoria>.png
+- Small-world summary: results/figures/smallworld_summary.png
+- IRT distribuzione e profilo: results/figures/irt_hist_<categoria>.png, results/figures/irt_position_<categoria>.png
