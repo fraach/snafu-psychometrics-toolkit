@@ -97,31 +97,6 @@ def ensure_filtered_dataset(*, force: bool = False) -> None:
         needs_refresh = True
     if needs_refresh:
         merge_and_validate_rows(str(RAW_FILE), str(SCHEME_DIR), str(FILTERED_FILE))
-    try:
-        df = pd.read_csv(FILTERED_FILE, dtype=str)
-        before = len(df)
-        if "item" in df.columns:
-            df["item"] = df["item"].fillna("").astype(str)
-            df.loc[:, "item"] = df["item"].str.strip().str.replace("'", "", regex=False)
-
-            def _letters_only(s: str) -> str:
-                return "".join(ch for ch in s if ch.isalpha())
-
-            letters = df["item"].map(_letters_only)
-
-            mask_nonempty = letters.str.len() > 0
-            removed_empty = int((~mask_nonempty).sum())
-            df = df[mask_nonempty].copy()
-
-            df.loc[:, "item"] = letters[mask_nonempty].values
-
-        df.to_csv(FILTERED_FILE, index=False)
-        if before - len(df) > 0:
-            print(
-                f"[sanitize] Rimosse {before - len(df)} righe con item vuoto/non alfabetico da {FILTERED_FILE}"
-            )
-    except Exception:
-        pass
 
 
 def serialize_nested(value) -> str:
@@ -410,7 +385,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
 
 

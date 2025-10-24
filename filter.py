@@ -2,6 +2,12 @@ import pandas as pd
 import os
 import argparse
 
+def _letters_only(s: str) -> str:
+    try:
+        return "".join(ch for ch in str(s) if str(ch).isalpha())
+    except Exception:
+        return ""
+
 def _load_allowed_items(category_dir: str) -> dict:
     """Carica per ciascuna categoria l'insieme di item validi dallo schema.
 
@@ -79,8 +85,14 @@ def _remove_consecutive_ot_runs(df: pd.DataFrame, category_dir: str, min_run: in
     return df
 
 def merge_and_validate_rows(input_file, category_dir, output_file, *, min_ot_run: int = 3, apply_ot_filter: bool = True):
-    
+
     data = pd.read_csv(input_file)
+    initial_unique_ids = None
+    if 'id' in data.columns:
+        try:
+            initial_unique_ids = data['id'].astype(str).nunique(dropna=True)
+        except Exception:
+            initial_unique_ids = None
     merged_data = []
 
     i = 0
@@ -138,8 +150,35 @@ def merge_and_validate_rows(input_file, category_dir, output_file, *, min_ot_run
         except Exception as e:
             print(f"[WARN] Filtraggio OT non applicato per errore: {e}")
 
+    # Normalizza item: rimuove apici/spazi, tiene solo caratteri alfabetici
+    # e rimuove le righe con item vuoto/non alfabetico
+    if not merged_df.empty and 'item' in merged_df.columns:
+        before_rows = len(merged_df)
+        items = (
+            merged_df['item']
+            .fillna('')
+            .astype(str)
+            .str.strip()
+            .str.replace("'", "", regex=False)
+        )
+        letters = items.map(_letters_only)
+        mask_nonempty = letters.str.len() > 0
+        removed = int((~mask_nonempty).sum())
+        merged_df = merged_df.loc[mask_nonempty, :].copy()
+        merged_df.loc[:, 'item'] = letters[mask_nonempty].values
+        if removed > 0:
+            print(f"[sanitize] Rimosse {removed} righe con item vuoto/non alfabetico")
+
     merged_df.to_csv(output_file, index=False)
     print(f"File salvato con successo in: {output_file}")
+    if 'id' in merged_df.columns:
+        try:
+            n_ids = merged_df['id'].astype(str).nunique(dropna=True)
+            if initial_unique_ids is not None:
+                print(f"ID unici iniziali: {initial_unique_ids}")
+            print(f"ID unici nel file finale: {n_ids}")
+        except Exception:
+            pass
 
 
 def _parse_args():

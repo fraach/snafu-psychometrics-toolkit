@@ -103,6 +103,13 @@ def keep_only_allowed_columns(
     no_gender_splits: bool = False,
 ) -> None:
     df = pd.read_csv(input_csv, sep=sep, engine=infer_engine(sep), encoding=encoding)
+    initial_unique_ids = None
+    if "id" in df.columns:
+        try:
+            initial_unique_ids = df["id"].astype(str).nunique(dropna=True)
+            print(f"[status] ID unici iniziali (input): {initial_unique_ids} (righe={len(df)})")
+        except Exception:
+            initial_unique_ids = None
 
     removed = [c for c in df.columns if c not in ALLOWED_COLUMNS]
     missing = [c for c in ALLOWED_COLUMNS if c not in df.columns]
@@ -112,6 +119,10 @@ def keep_only_allowed_columns(
             before_rows = len(df)
             df = df[df["id"].astype(str).str.endswith(id_suffix, na=False)].copy()
             print(f"Righe mantenute per suffisso id='{id_suffix}': {len(df)} (filtrate {before_rows - len(df)})")
+            try:
+                print(f"[status] ID unici dopo filtro --id-suffix: {df['id'].astype(str).nunique(dropna=True)}")
+            except Exception:
+                pass
         else:
             print("[WARN] Filtro --id-suffix ignorato: colonna 'id' assente nel CSV di ingresso")
     if id_prefix:
@@ -119,6 +130,10 @@ def keep_only_allowed_columns(
             before_rows = len(df)
             df = df[df["id"].astype(str).str.startswith(id_prefix, na=False)].copy()
             print(f"Righe mantenute per prefisso id='{id_prefix}': {len(df)} (filtrate {before_rows - len(df)})")
+            try:
+                print(f"[status] ID unici dopo filtro --id-prefix: {df['id'].astype(str).nunique(dropna=True)}")
+            except Exception:
+                pass
         else:
             print("[WARN] Filtro --id-prefix ignorato: colonna 'id' assente nel CSV di ingresso")
 
@@ -161,6 +176,10 @@ def keep_only_allowed_columns(
             if "id" in df.columns:
                 df = df[df["id"].astype(str).isin(kept_ids)].copy()
                 print(f"Righe mantenute per study_id: {len(df)} (filtrate {before_rows - len(df)})")
+                try:
+                    print(f"[status] ID unici dopo filtro study_id: {df['id'].astype(str).nunique(dropna=True)}")
+                except Exception:
+                    pass
             else:
                 print("[WARN] Colonna 'id' mancante: impossibile filtrare per study_id")
 
@@ -176,6 +195,11 @@ def keep_only_allowed_columns(
         df[col] = pd.NA
 
     df_out = df[ALLOWED_COLUMNS]
+    if "id" in df_out.columns:
+        try:
+            print(f"[status] ID unici dopo selezione colonne: {df_out['id'].astype(str).nunique(dropna=True)} (righe={len(df_out)})")
+        except Exception:
+            pass
     df_out.to_csv(
         output_csv,
         index=False,
@@ -190,6 +214,14 @@ def keep_only_allowed_columns(
         print(f"Colonne rimosse ({len(removed)}): {', '.join(removed)}")
     if missing:
         print(f"Colonne aggiunte come vuote ({len(missing)}): {', '.join(missing)}")
+    if "id" in df_out.columns:
+        try:
+            n_ids = df_out["id"].astype(str).nunique(dropna=True)
+            if initial_unique_ids is not None:
+                print(f"ID unici iniziali: {initial_unique_ids}")
+            print(f"ID unici nel file finale: {n_ids}")
+        except Exception:
+            pass
 
     if (not no_gender_splits) and kept_gender_map and "id" in df_out.columns:
         male_ids = {pid for pid, g in kept_gender_map.items() if g == "male"}
@@ -209,7 +241,11 @@ def keep_only_allowed_columns(
                 quoting=csv.QUOTE_ALL,
                 quotechar='"',
             )
-            print(f"[gender] Salvato dataset maschi: {output_male} (righe={len(d_m)})")
+            try:
+                n_m_ids = d_m["id"].astype(str).nunique(dropna=True)
+            except Exception:
+                n_m_ids = "NA"
+            print(f"[gender] Salvato dataset maschi: {output_male} (righe={len(d_m)}, id_unici={n_m_ids})")
         if female_ids:
             d_f = df_out[df_out["id"].astype(str).isin(female_ids)].copy()
             d_f.to_csv(
@@ -220,7 +256,11 @@ def keep_only_allowed_columns(
                 quoting=csv.QUOTE_ALL,
                 quotechar='"',
             )
-            print(f"[gender] Salvato dataset femmine: {output_female} (righe={len(d_f)})")
+            try:
+                n_f_ids = d_f["id"].astype(str).nunique(dropna=True)
+            except Exception:
+                n_f_ids = "NA"
+            print(f"[gender] Salvato dataset femmine: {output_female} (righe={len(d_f)}, id_unici={n_f_ids})")
 
 
 def parse_args() -> argparse.Namespace:
