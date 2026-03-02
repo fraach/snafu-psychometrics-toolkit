@@ -64,7 +64,7 @@ function Ensure-Requirements {
     pip install snafu
   }
   if ($LASTEXITCODE -ne 0) {
-    Write-Warning "Installazione 'snafu' non riuscita. Alcune funzioni (analyze_snafu.py) non saranno disponibili."
+    Write-Warning "Installazione 'snafu' non riuscita. Alcune funzioni (functions\analyze_snafu.py) non saranno disponibili."
     Write-Host "Suggerimenti:" -ForegroundColor Yellow
     Write-Host " - Verifica la connessione Internet" -ForegroundColor Yellow
     Write-Host " - Riprova: pip install snafu" -ForegroundColor Yellow
@@ -85,13 +85,13 @@ function Run-Project {
   Write-Host "[5/5] Eseguo analisi e grafici..." -ForegroundColor Cyan
   $hasSnafu = Test-PythonModule -Module snafu
   if ($hasSnafu) {
-    python analyze_snafu.py
+    python functions\analyze_snafu.py
   } else {
-    Write-Warning "Modulo 'snafu' non disponibile: salto analyze_snafu.py."
+    Write-Warning "Modulo 'snafu' non disponibile: salto functions\analyze_snafu.py."
     Write-Host "Se hai già file CSV in 'results/', posso generare comunque i grafici." -ForegroundColor Yellow
   }
   if (Test-Path (Join-Path "results" "psychometrics.csv") -and Test-Path (Join-Path "results" "network_metrics.csv")) {
-    python plot_snafu_results.py
+    python functions\plot_snafu_results.py
     Write-Host "Output salvati in 'results' (csv e figure)." -ForegroundColor Green
   } else {
     Write-Warning "Grafici non generati: mancano i file CSV in 'results/'. Installa 'snafu' e riesegui lo script."
@@ -127,4 +127,4 @@ Optional-Editors
 Write-Host "Fatto. Per riutilizzare l'ambiente in futuro:" -ForegroundColor Green
 Write-Host "  1) Apri PowerShell nella cartella del progetto" -ForegroundColor Gray
 Write-Host "  2) Attiva: .\\.venv\\Scripts\\Activate.ps1" -ForegroundColor Gray
-Write-Host "  3) Esegui: python analyze_snafu.py (e poi plot_snafu_results.py)" -ForegroundColor Gray
+Write-Host "  3) Esegui: python functions\analyze_snafu.py (e poi functions\plot_snafu_results.py)" -ForegroundColor Gray

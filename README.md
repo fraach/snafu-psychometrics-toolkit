@@ -30,15 +30,15 @@ Cosa fa lo script:
 - verifica/installa Python (via winget se necessario)
 - crea l'ambiente virtuale `.venv`
 - installa i pacchetti da `requirements.txt`
-- esegue l'analisi (`analyze_snafu.py`) e genera i grafici (`plot_snafu_results.py`)
+- esegue l'analisi (`functions/analyze_snafu.py`) e genera i grafici (`functions/plot_snafu_results.py`)
 - salva gli output nella cartella `results/`
 
 ## Ri-esecuzione (dopo il primo setup)
 Se hai già eseguito il setup una volta e vuoi rigenerare i risultati:
 ```powershell
 .\.venv\Scripts\Activate.ps1
-python analyze_snafu.py
-python plot_snafu_results.py
+python functions/analyze_snafu.py
+python functions/plot_snafu_results.py
 ```
 
 ## Installazione MANUALE (alternativa)
@@ -57,8 +57,8 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
    ```
 3) Lancia gli script:
    ```powershell
-   python analyze_snafu.py
-   python plot_snafu_results.py
+   python functions/analyze_snafu.py
+   python functions/plot_snafu_results.py
    ```
 
 ## Output generati (cartella `results/`)
@@ -78,33 +78,33 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
     - `irt_hist_<categoria>.png` e `irt_position_<categoria>.png` — distribuzione IRT e IRT medio per posizione
 
 ## Novità principali (tooling e CLI)
-- `keep_columns.py`: filtra per `--id-prefix`/`--id-suffix`; integrazione filtro pazienti `--patient-csv` + `--study-id`; genera dataset aggiuntivi maschi/femmine; output sempre quotato.
-- `filter.py`: ora ha CLI; rimuove run OT con `--min-ot-run` (o disattiva con `--no-ot-filter`).
-- `analyze_snafu.py`: CLI completa (percorsi, categorie, parametri Conceptual Network, `--force-merge`, `--skip-*`).
-- `plot_snafu_results.py`: figure più ampie e layout meno denso; opzioni `PLOT_CFG` per GCC/k‑core/etichette; nuovi grafici (gradi, small‑world, IRT) e lettura CSV robusta a encoding.
-- Pipeline esempi: `pnrr_test.py` (Python) e `pnrr_test.ps1` (PowerShell). Guida: `PNRR_TEST.md`.
+- `functions/keep_columns.py`: filtra per `--id-prefix`/`--id-suffix`; integrazione filtro pazienti `--patient-csv` + `--study-id`; genera dataset aggiuntivi maschi/femmine; output sempre quotato.
+- `functions/filter.py`: ora ha CLI; rimuove run OT con `--min-ot-run` (o disattiva con `--no-ot-filter`).
+- `functions/analyze_snafu.py`: CLI completa (percorsi, categorie, parametri Conceptual Network, `--force-merge`, `--skip-*`).
+- `functions/plot_snafu_results.py`: figure più ampie e layout meno denso; opzioni `PLOT_CFG` per GCC/k‑core/etichette; nuovi grafici (gradi, small‑world, IRT) e lettura CSV robusta a encoding.
+- Pipeline esempi: `test.py` (Python) e `info/pnrr_test.ps1` (PowerShell). Guida: `info/PNRR_TEST.md`.
 
 ## Pipeline PNRR (consigliata)
 - Opzione Python (import diretto dei moduli):
-  - `py pnrr_test.py --raw "fluency_data\snafu_downloaded.csv" --patients "fluency_data\patients.csv" --study-id PNRR --id-prefix PNRR --categories animali frutta verdura`
+  - `py test.py --raw "fluency_data\snafu_downloaded.csv" --patients "fluency_data\patients.csv" --study-id PNRR --id-prefix PNRR --categories animali frutta verdura`
 - Opzione PowerShell (script):
-  - `.\pnrr_test.ps1 -Raw "fluency_data\snafu_downloaded.csv" -Patients "fluency_data\patients.csv" -StudyId PNRR -IdPrefix PNRR -MinOTRun 3 -Categories animali,frutta,verdura`
+  - `.\info\pnrr_test.ps1 -Raw "fluency_data\snafu_downloaded.csv" -Patients "fluency_data\patients.csv" -StudyId PNRR -IdPrefix PNRR -MinOTRun 3 -Categories animali,frutta,verdura`
 
 ## Esempi CLI per singolo step
-- `keep_columns.py` (standardizza e filtra):
-  - `python keep_columns.py input.csv -o fluency_data\snafu_downloaded.csv --id-prefix PNRR --patient-csv fluency_data\patients.csv --study-id PNRR`
+- `functions/keep_columns.py` (standardizza e filtra):
+  - `python functions/keep_columns.py input.csv -o fluency_data\snafu_downloaded.csv --id-prefix PNRR --patient-csv fluency_data\patients.csv --study-id PNRR`
   - Aggiungi `--output-male ... --output-female ...` per gli split di genere; `--sep ";"` se usa `;`.
-- `filter.py` (merge + OT):
-  - `py filter.py --input fluency_data\snafu.csv --schemes schemes --output fluency_data\filtered_snafu.csv --min-ot-run 3`
-- `analyze_snafu.py` (analisi):
-  - `py analyze_snafu.py --filtered-file fluency_data\filtered_snafu.csv --scheme-dir schemes --results-dir results`
+- `functions/filter.py` (merge + OT):
+  - `py functions/filter.py --input fluency_data\snafu.csv --schemes schemes --output fluency_data\filtered_snafu.csv --min-ot-run 3`
+- `functions/analyze_snafu.py` (analisi):
+  - `py functions/analyze_snafu.py --filtered-file fluency_data\filtered_snafu.csv --scheme-dir schemes --results-dir results`
   - Con categorie: `--categories animali frutta verdura`
   - Parametri CN: `--cn-alpha 0.01 --cn-window 3 --cn-threshold 3`
-- `plot_snafu_results.py` (grafici):
-  - `py plot_snafu_results.py` (usa `PLOT_CFG` interno per ridurre l’affollamento)
+- `functions/plot_snafu_results.py` (grafici):
+  - `py functions/plot_snafu_results.py` (usa `PLOT_CFG` interno per ridurre l’affollamento)
 
 ## Note utili
-- Encoding: i CSV delle reti sono letti in modo robusto (utf‑8‑sig/utf‑8/cp1252/latin1). Se un grafico resta vuoto, rigenera le reti con `analyze_snafu.py` e riprova.
+- Encoding: i CSV delle reti sono letti in modo robusto (utf‑8‑sig/utf‑8/cp1252/latin1). Se un grafico resta vuoto, rigenera le reti con `functions/analyze_snafu.py` e riprova.
 - SNAFU opzionale nei grafici: small‑world e IRT vengono saltati se `snafu` non è disponibile; gli altri grafici si generano comunque.
 
 ## Uso con Visual Studio Code (facoltativo)
@@ -114,8 +114,8 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
 - Terminale → Nuovo terminale, poi:
   ```powershell
   .\.venv\Scripts\Activate.ps1
-  python analyze_snafu.py
-  python plot_snafu_results.py
+  python functions/analyze_snafu.py
+  python functions/plot_snafu_results.py
   ```
 
 ## Risoluzione problemi
@@ -133,11 +133,24 @@ Se `winget` non è disponibile o preferisci i passaggi manuali:
 - Senza `snafu` non puoi generare i CSV in `results/`. Se possiedi già `results/psychometrics.csv` e `results/network_metrics.csv`, puoi comunque eseguire:
   ```powershell
   .\.venv\Scripts\Activate.ps1
-  python plot_snafu_results.py
+  python functions/plot_snafu_results.py
   ```
 
 ## Dati e privacy
 La repo elabora i file inclusi nella cartella `fluency_data/`. Assicurati di avere i diritti per trattare i dati.
+
+## Creare un file eseguibile (.exe)
+Per generare l'eseguibile GUI SNAFU:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_snafu_exe.ps1
+.\snafu.exe
+```
+Campi essenziali:
+- `Raw CSV (obbligatorio)`
+
+Campi opzionali:
+- `Patients CSV`, `Study ID`
+- `Output CSV`, `Cartella Schemi`, `Cartella Risultati`, `ID Prefix`, `ID Suffix`, `Categorie`, parametri CN e flag
 
 ***
 Per dubbi o problemi, apri una issue o contatta il maintainer.
