@@ -52,32 +52,31 @@ function Ensure-Venv {
 
 function Ensure-Requirements {
   Write-Host "[4/5] Installo dipendenze principali..." -ForegroundColor Cyan
-  # Pacchetti core necessari anche senza snafu
-  pip install --upgrade pip setuptools wheel
-  pip install numpy pandas networkx matplotlib
+  python -m pip install --upgrade pip setuptools wheel
+  python -m pip install numpy pandas networkx matplotlib
 
   Write-Host "Provo ad installare 'snafu' (opzionale, richiesto per l'analisi)..." -ForegroundColor Cyan
+
+  $repoUrl = "git+https://github.com/AusterweilLab/snafu-py"
   if ($SnafuGitUrl -and $SnafuGitUrl.Trim() -ne "") {
-    Write-Host "Installo snafu da sorgente: $SnafuGitUrl" -ForegroundColor Cyan
-    pip install $SnafuGitUrl
-  } else {
-    pip install snafu
+    $repoUrl = $SnafuGitUrl
   }
+
+  Write-Host "Installo snafu da sorgente: $repoUrl" -ForegroundColor Cyan
+  python -m pip install $repoUrl
+
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "Installazione 'snafu' non riuscita. Alcune funzioni (functions\analyze_snafu.py) non saranno disponibili."
     Write-Host "Suggerimenti:" -ForegroundColor Yellow
     Write-Host " - Verifica la connessione Internet" -ForegroundColor Yellow
-    Write-Host " - Riprova: pip install snafu" -ForegroundColor Yellow
-    Write-Host " - Se non è su PyPI, installa dal repo ufficiale (es. pip install git+https://github.com/<org>/<repo>.git)" -ForegroundColor Yellow
+    Write-Host " - Verifica che Git sia installato e disponibile nel PATH" -ForegroundColor Yellow
+    Write-Host " - Riprova manualmente: python -m pip install $repoUrl" -ForegroundColor Yellow
   }
 }
 
 function Test-PythonModule {
   param([string]$Module)
-  python - <<PY 2>$null
-import importlib, sys
-sys.exit(0 if importlib.util.find_spec("$Module") else 1)
-PY
+  python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('$Module') else 1)" 2>$null
   return ($LASTEXITCODE -eq 0)
 }
 
