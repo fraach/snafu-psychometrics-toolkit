@@ -49,6 +49,7 @@ NETWORK_METHODS: Iterable[str] = (
     "conceptual_network",
     "pathfinder",
     "first_edge",
+    "uinvite",
 )
 
 
@@ -279,9 +280,14 @@ def plot_network(category: str, method: str, metrics_df: pd.DataFrame) -> None:
 def plot_degree_distribution(category: str) -> None:
     """Plot della distribuzione dei gradi per tutti i metodi di una categoria."""
     methods = list(NETWORK_METHODS)
-    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-    axes = axes.ravel()
-    for ax, method in zip(axes, methods):
+    if not methods:
+        return
+    cols = 2 if len(methods) <= 4 else 3
+    rows = int(np.ceil(len(methods) / cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4.5 * rows))
+    axes = np.atleast_1d(axes).ravel()
+    for idx, method in enumerate(methods):
+        ax = axes[idx]
         try:
             G = load_network(category, method)
         except Exception as err:
@@ -299,6 +305,8 @@ def plot_degree_distribution(category: str) -> None:
         ax.set_xlabel("Grado")
         ax.set_ylabel("Frequenza")
         ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.6)
+    for ax in axes[len(methods):]:
+        ax.axis("off")
     fig.suptitle(f"Distribuzione dei gradi — {category.title()}")
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     fig.savefig(FIGURES_DIR / f"degree_dist_{category}.png", dpi=300)

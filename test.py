@@ -58,6 +58,11 @@ def run_pipeline(
     cn_alpha: float = 0.05,
     cn_window: int = 2,
     cn_threshold: int = 2,
+    include_uinvite: bool = True,
+    uinvite_prune_limit: int = 100,
+    uinvite_triangle_limit: int = 100,
+    uinvite_other_limit: int = 100,
+    uinvite_seed: int | None = 42,
 ) -> None:
     results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -103,7 +108,17 @@ def run_pipeline(
     psych_path = results_dir / "psychometrics.csv"
     psychometrics.to_csv(psych_path, index=False)
 
-    network_metrics = an.infer_semantic_networks(categories, cn_alpha=cn_alpha, cn_windowsize=cn_window, cn_threshold=cn_threshold)
+    network_metrics = an.infer_semantic_networks(
+        categories,
+        cn_alpha=cn_alpha,
+        cn_windowsize=cn_window,
+        cn_threshold=cn_threshold,
+        include_uinvite=include_uinvite,
+        uinvite_prune_limit=uinvite_prune_limit,
+        uinvite_triangle_limit=uinvite_triangle_limit,
+        uinvite_other_limit=uinvite_other_limit,
+        uinvite_seed=uinvite_seed,
+    )
     netm_path = results_dir / "network_metrics.csv"
     network_metrics.to_csv(netm_path, index=False)
 
@@ -118,10 +133,25 @@ def run_pipeline(
 
     psych_df = pd.read_csv(psych_path)
     netm_df = pd.read_csv(netm_path)
+
+    if "error" not in netm_df.columns:
+        netm_df["error"] = ""
+    else:
+        netm_df["error"] = netm_df["error"].fillna("")
+
     psr.plot_psychometric_summary(psych_df)
     psr.plot_network_metrics_summary(netm_df)
+
+    successful = netm_df[netm_df["error"] == ""] if "error" in netm_df.columns else netm_df
+    successful_methods_by_category = {
+        cat: set(successful.loc[successful["category"] == cat, "method"].astype(str).tolist())
+        for cat in categories
+    }
+
     for cat in categories:
-        for method in psr.NETWORK_METHODS:
+        cat_methods = successful_methods_by_category.get(cat, set())
+        methods_to_plot = [m for m in psr.NETWORK_METHODS if m in cat_methods]
+        for method in methods_to_plot:
             psr.plot_network(cat, method, netm_df)
         # Anche la distribuzione dei gradi per categoria
         psr.plot_degree_distribution(cat)
@@ -147,6 +177,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--cn-alpha", type=float, default=0.05)
     p.add_argument("--cn-window", type=int, default=2)
     p.add_argument("--cn-threshold", type=int, default=2)
+    p.add_argument("--skip-uinvite", action="store_true", help="Non stimare la rete U-INVITE")
+    p.add_argument("--uinvite-prune-limit", type=int, default=100)
+    p.add_argument("--uinvite-triangle-limit", type=int, default=100)
+    p.add_argument("--uinvite-other-limit", type=int, default=100)
+    p.add_argument("--uinvite-seed", type=int, default=42)
     p.add_argument("--no-gender-splits", action="store_true")
     return p.parse_args()
 
@@ -171,6 +206,11 @@ def main() -> None:
         cn_alpha=a.cn_alpha,
         cn_window=a.cn_window,
         cn_threshold=a.cn_threshold,
+        include_uinvite=not a.skip_uinvite,
+        uinvite_prune_limit=a.uinvite_prune_limit,
+        uinvite_triangle_limit=a.uinvite_triangle_limit,
+        uinvite_other_limit=a.uinvite_other_limit,
+        uinvite_seed=a.uinvite_seed,
     )
 
 

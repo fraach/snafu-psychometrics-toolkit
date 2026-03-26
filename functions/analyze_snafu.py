@@ -110,6 +110,18 @@ def prepare_first_edge_sequences(sequences):
     """Keep only fluency lists with at least two items for First Edge."""
     return [seq for seq in sequences if isinstance(seq, (list, tuple)) and len(seq) >= 2]
 
+
+def prepare_uinvite_sequences(sequences):
+    """Keep non-empty lists and ensure integer node indices for U-INVITE."""
+    cleaned = []
+    for seq in sequences:
+        if not isinstance(seq, (list, tuple, np.ndarray)):
+            continue
+        if len(seq) == 0:
+            continue
+        cleaned.append([int(x) for x in seq])
+    return cleaned
+
 def flatten_unique_strings(value) -> str:
     if not value:
         return "[]"
@@ -246,13 +258,27 @@ def compute_graph_metrics(graph: nx.Graph) -> dict[str, object]:
     return metrics
 
 
-def infer_semantic_networks(categories: list[str], *, cn_alpha: float = 0.05, cn_windowsize: int = 2, cn_threshold: int = 2) -> pd.DataFrame:
+def infer_semantic_networks(
+    categories: list[str],
+    *,
+    cn_alpha: float = 0.05,
+    cn_windowsize: int = 2,
+    cn_threshold: int = 2,
+    include_uinvite: bool = True,
+    uinvite_prune_limit: int = 100,
+    uinvite_triangle_limit: int = 100,
+    uinvite_other_limit: int = 100,
+    uinvite_seed: int | None = 42,
+) -> pd.DataFrame:
     NETWORK_DIR.mkdir(parents=True, exist_ok=True)
     fitinfo = snafu.Fitinfo(
         {
             "cn_alpha": cn_alpha,
             "cn_windowsize": cn_windowsize,
             "cn_threshold": cn_threshold,
+            "prune_limit": uinvite_prune_limit,
+            "triangle_limit": uinvite_triangle_limit,
+            "other_limit": uinvite_other_limit,
         }
     )
 
@@ -272,6 +298,7 @@ def infer_semantic_networks(categories: list[str], *, cn_alpha: float = 0.05, cn
 
         sequences = data.Xs
         first_edge_sequences = prepare_first_edge_sequences(sequences)
+        uinvite_sequences = prepare_uinvite_sequences(sequences)
 
         def build_first_edge():
             if not first_edge_sequences:
@@ -301,6 +328,25 @@ def infer_semantic_networks(categories: list[str], *, cn_alpha: float = 0.05, cn
             ),
             "first_edge": build_first_edge,
         }
+        can_run_uinvite = include_uinvite
+        if can_run_uinvite:
+            if not uinvite_sequences:
+                network_rows.append(
+                    {
+                        "category": category,
+                        "method": "uinvite",
+                        "error": "No non-empty fluency lists after preprocessing",
+                    }
+                )
+                can_run_uinvite = False
+            else:
+                builders["uinvite"] = lambda: snafu.uinvite(
+                    uinvite_sequences,
+                    numnodes=data.groupnumnodes,
+                    fitinfo=fitinfo,
+                    debug=False,
+                    seed=uinvite_seed,
+                )
 
         for method, builder in builders.items():
             try:
@@ -315,7 +361,8 @@ def infer_semantic_networks(categories: list[str], *, cn_alpha: float = 0.05, cn
                 )
                 continue
 
-            nx_graph = to_networkx_graph(raw_graph)
+            graph_for_output = raw_graph[0] if isinstance(raw_graph, tuple) else raw_graph
+            nx_graph = to_networkx_graph(graph_for_output)
             metrics = compute_graph_metrics(nx_graph)
             metrics.update(
                 {
@@ -327,7 +374,7 @@ def infer_semantic_networks(categories: list[str], *, cn_alpha: float = 0.05, cn
 
             output_path = NETWORK_DIR / f"{category}_{method}.csv"
             snafu.write_graph(
-                raw_graph,
+                graph_for_output,
                 str(output_path),
                 labels=data.groupitems,
                 subj=category.upper(),
@@ -348,6 +395,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--cn-alpha", type=float, default=0.05)
     p.add_argument("--cn-window", type=int, default=2)
     p.add_argument("--cn-threshold", type=int, default=2)
+    p.add_argument("--skip-uinvite", action="store_true", help="Non stimare la rete U-INVITE")
+    p.add_argument("--uinvite-prune-limit", type=int, default=100, help="Limite toggles fase prune per U-INVITE")
+    p.add_argument("--uinvite-triangle-limit", type=int, default=100, help="Limite toggles fase triangle per U-INVITE")
+    p.add_argument("--uinvite-other-limit", type=int, default=100, help="Limite toggles fase other per U-INVITE")
+    p.add_argument("--uinvite-seed", type=int, default=42, help="Seed random per U-INVITE")
     return p.parse_args()
 
 
@@ -375,7 +427,17 @@ def main() -> None:
         psychometrics.to_csv(RESULTS_DIR / "psychometrics.csv", index=False)
 
     if not args.skip_networks:
-        network_metrics = infer_semantic_networks(cats, cn_alpha=args.cn_alpha, cn_windowsize=args.cn_window, cn_threshold=args.cn_threshold)
+        network_metrics = infer_semantic_networks(
+            cats,
+            cn_alpha=args.cn_alpha,
+            cn_windowsize=args.cn_window,
+            cn_threshold=args.cn_threshold,
+            include_uinvite=not args.skip_uinvite,
+            uinvite_prune_limit=args.uinvite_prune_limit,
+            uinvite_triangle_limit=args.uinvite_triangle_limit,
+            uinvite_other_limit=args.uinvite_other_limit,
+            uinvite_seed=args.uinvite_seed,
+        )
         network_metrics.to_csv(RESULTS_DIR / "network_metrics.csv", index=False)
 
     print("Psychometrics saved to", RESULTS_DIR / "psychometrics.csv")
@@ -385,10 +447,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
-
 
 
 

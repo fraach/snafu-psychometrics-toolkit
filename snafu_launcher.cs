@@ -395,26 +395,39 @@ internal sealed class MainForm : Form
 
     private void UpdateSplitLayout()
     {
-        if (_split == null)
+        if (_split == null || _split.IsDisposed || !_split.IsHandleCreated)
         {
             return;
         }
 
         int preferredLogHeight = 180;
-        int availableHeight = _split.ClientSize.Height;
-        int maxDistance = availableHeight - _split.Panel2MinSize - _split.SplitterWidth;
-        int desiredDistance = availableHeight - preferredLogHeight - _split.SplitterWidth;
-        int minDistance = _split.Panel1MinSize;
-
-        if (maxDistance < minDistance)
+        int span = _split.Orientation == Orientation.Horizontal ? _split.ClientSize.Height : _split.ClientSize.Width;
+        if (span <= 0)
         {
-            maxDistance = minDistance;
+            return;
         }
 
-        int finalDistance = Math.Max(minDistance, Math.Min(desiredDistance, maxDistance));
-        if (finalDistance > 0)
+        int minDistance = _split.Panel1MinSize;
+        int maxDistance = span - _split.Panel2MinSize;
+
+        // Window too small: no legal SplitterDistance interval exists.
+        if (maxDistance < minDistance)
         {
-            _split.SplitterDistance = finalDistance;
+            return;
+        }
+
+        int desiredDistance = span - preferredLogHeight;
+        int finalDistance = Math.Max(minDistance, Math.Min(desiredDistance, maxDistance));
+        if (finalDistance > 0 && _split.SplitterDistance != finalDistance)
+        {
+            try
+            {
+                _split.SplitterDistance = finalDistance;
+            }
+            catch (InvalidOperationException)
+            {
+                // Ignore transient invalid states while container is laying out.
+            }
         }
     }
 
