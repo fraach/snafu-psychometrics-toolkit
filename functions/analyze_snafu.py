@@ -5,7 +5,8 @@ import argparse
 import warnings
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent.resolve()
+MODULE_DIR = Path(__file__).resolve().parent
+BASE_DIR = MODULE_DIR.parent
 
 
 def _extend_sys_path() -> list[str]:
@@ -85,9 +86,6 @@ def get_scheme_path(category: str) -> Path:
     if category not in SCHEMES:
         raise KeyError(f"Categoria sconosciuta: {category}")
     return sanitize_scheme_file(SCHEMES[category])
-
-
-
 
 def ensure_filtered_dataset(*, force: bool = False) -> None:
     needs_refresh = not FILTERED_FILE.exists()
@@ -447,7 +445,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
 
 
