@@ -259,6 +259,7 @@ def compute_graph_metrics(graph: nx.Graph) -> dict[str, object]:
 def infer_semantic_networks(
     categories: list[str],
     *,
+    subject_id: str | None = None,
     cn_alpha: float = 0.05,
     cn_windowsize: int = 2,
     cn_threshold: int = 2,
@@ -279,13 +280,20 @@ def infer_semantic_networks(
             "other_limit": uinvite_other_limit,
         }
     )
+    if subject_id is not None:
+        full_df = pd.read_csv(FILTERED_FILE)
+        subject_df = full_df[full_df["id"].astype(str) == subject_id]
+        data_source = RESULTS_DIR / f"_tmp_{subject_id}.csv"
+        subject_df.to_csv(data_source, index=False)
+    else:
+        data_source = FILTERED_FILE
 
     network_rows: list[dict[str, object]] = []
 
     for category in categories:
         scheme_path = get_scheme_path(category)
         data = snafu.load_fluency_data(
-            str(FILTERED_FILE),
+            str(data_source),
             category=category,
             removePerseverations=True,
             removeIntrusions=True,
@@ -331,6 +339,7 @@ def infer_semantic_networks(
             if not uinvite_sequences:
                 network_rows.append(
                     {
+                        "subject_id": subject_id,
                         "category": category,
                         "method": "uinvite",
                         "error": "No non-empty fluency lists after preprocessing",
@@ -364,25 +373,31 @@ def infer_semantic_networks(
             metrics = compute_graph_metrics(nx_graph)
             metrics.update(
                 {
+                    "subject_id": subject_id,
                     "category": category,
                     "method": method,
                 }
             )
             network_rows.append(metrics)
 
-            output_path = NETWORK_DIR / f"{category}_{method}.csv"
-            snafu.write_graph(
-                graph_for_output,
-                str(output_path),
-                labels=data.groupitems,
-                subj=category.upper(),
-            )
+            if subject_id is None:
+                output_path = NETWORK_DIR / f"{category}_{method}.csv"
+                snafu.write_graph(
+                    graph_for_output,
+                    str(output_path),
+                    labels=data.groupitems,
+                    subj=category.upper(),
+                )
+
+    if subject_id is not None:
+        data_source.unlink(missing_ok=True)
 
     return pd.DataFrame(network_rows)
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Analisi SNAFU: psicometria e reti semantiche")
     p.add_argument("--raw-file", type=Path, default=RAW_FILE, help="CSV grezzo (input)")
+    p.add_argument("--subject-level", action="store_true", help="Analisi reti per ogni soggetto individualmente")
     p.add_argument("--filtered-file", type=Path, default=FILTERED_FILE, help="CSV filtrato (output di filter.py)")
     p.add_argument("--scheme-dir", type=Path, default=SCHEME_DIR, help="Directory degli schemi")
     p.add_argument("--results-dir", type=Path, default=RESULTS_DIR, help="Directory risultati")
@@ -425,18 +440,39 @@ def main() -> None:
         psychometrics.to_csv(RESULTS_DIR / "psychometrics.csv", index=False)
 
     if not args.skip_networks:
-        network_metrics = infer_semantic_networks(
-            cats,
-            cn_alpha=args.cn_alpha,
-            cn_windowsize=args.cn_window,
-            cn_threshold=args.cn_threshold,
-            include_uinvite=not args.skip_uinvite,
-            uinvite_prune_limit=args.uinvite_prune_limit,
-            uinvite_triangle_limit=args.uinvite_triangle_limit,
-            uinvite_other_limit=args.uinvite_other_limit,
-            uinvite_seed=args.uinvite_seed,
-        )
-        network_metrics.to_csv(RESULTS_DIR / "network_metrics.csv", index=False)
+        if args.subject_level:
+            full_df = pd.read_csv(FILTERED_FILE)
+            all_subjects = full_df["id"].astype(str).unique()
+            all_rows = []
+            for sid in all_subjects:
+                df = infer_semantic_networks(
+                    cats,
+                    subject_id=sid,
+                    cn_alpha=args.cn_alpha,
+                    cn_windowsize=args.cn_window,
+                    cn_threshold=args.cn_threshold,
+                    include_uinvite=not args.skip_uinvite,
+                    uinvite_prune_limit=args.uinvite_prune_limit,
+                    uinvite_triangle_limit=args.uinvite_triangle_limit,
+                    uinvite_other_limit=args.uinvite_other_limit,
+                    uinvite_seed=args.uinvite_seed,
+                )
+                all_rows.append(df)
+            network_metrics = pd.concat(all_rows, ignore_index=True)
+            network_metrics.to_csv(RESULTS_DIR / "network_metrics_per_subject.csv", index=False)
+        else:
+            network_metrics = infer_semantic_networks(
+                cats,
+                cn_alpha=args.cn_alpha,
+                cn_windowsize=args.cn_window,
+                cn_threshold=args.cn_threshold,
+                include_uinvite=not args.skip_uinvite,
+                uinvite_prune_limit=args.uinvite_prune_limit,
+                uinvite_triangle_limit=args.uinvite_triangle_limit,
+                uinvite_other_limit=args.uinvite_other_limit,
+                uinvite_seed=args.uinvite_seed,
+            )
+            network_metrics.to_csv(RESULTS_DIR / "network_metrics.csv", index=False)
 
     print("Psychometrics saved to", RESULTS_DIR / "psychometrics.csv")
     print("Network metrics saved to", RESULTS_DIR / "network_metrics.csv")
